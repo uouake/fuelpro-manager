@@ -750,6 +750,17 @@ return d;
 toast("Livraison confirmée -- stock mis à jour ✓", "success");
 };
 
+const cancelDelivery = (id) => {
+const d = db.deliveries.find((x) => x.id === id);
+if (!d) return;
+onSave({
+...db,
+deliveries: db.deliveries.map((x) => x.id === id ? { ...x, status: "annulée" } : x),
+trucks: db.trucks.map((t) => t.id === d.truckId ? { ...t, status: "disponible" } : t),
+});
+toast("Livraison annulée", "success");
+};
+
 const addDelivery = () => {
 if (!form.truckId || !form.stationId || !form.volume) { toast("Remplissez tous les champs", "error"); return; }
 const nd = { id: nextId(db.deliveries), truckId: +form.truckId, stationId: +form.stationId, volume: +form.volume, date: form.date, status: "en cours", confirmedBy: null };
@@ -785,10 +796,15 @@ return (
                 <td>{tr?.plate}</td>
                 <td>{fmt(d.volume)} L</td>
                 <td>{d.date}</td>
-                <td><span className={`badge ${d.status === "terminée" ? "badge-green" : "badge-yellow"}`}>{d.status}</span></td>
-                <td>
+                <td><span className={`badge ${d.status === "terminée" ? "badge-green" : d.status === "annulée" ? "badge-red" : "badge-yellow"}`}>{d.status}</span></td>
+                <td style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                   {d.status === "en cours" && (
-                    <button className="btn btn-outline btn-sm" onClick={() => confirm(d.id)}>Confirmer</button>
+                    <>
+                      <button className="btn btn-outline btn-sm" onClick={() => confirm(d.id)}>Confirmer</button>
+                      {(user.role === "gérant" || user.role === "admin") && (
+                        <button className="btn btn-danger btn-sm" onClick={() => cancelDelivery(d.id)}>Annuler</button>
+                      )}
+                    </>
                   )}
                 </td>
               </tr>
