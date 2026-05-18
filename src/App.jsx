@@ -287,22 +287,25 @@ margin-bottom:20px;
   .grid-3 { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* ── BOTTOM TAB BAR ── */
-.bottom-nav {
-  display: none;
-}
+/* ── HAMBURGER BUTTON ── */
+.hamburger { display: none; background: transparent; border: 1px solid var(--border); border-radius: 6px; color: var(--gold); font-size: 1.2rem; cursor: pointer; padding: 6px 10px; line-height: 1; transition: all .2s; }
+.hamburger:hover { background: rgba(201,168,76,0.1); }
+.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 99; }
+.sidebar-overlay.open { display: block; }
 
 /* ── MOBILE (< 768px) ── */
 @media (max-width: 767px) {
-  /* Cacher la sidebar complètement sur mobile */
-  .sidebar { display: none !important; }
-  .sidebar-overlay { display: none !important; }
-  .hamburger { display: none !important; }
+  /* Hamburger visible */
+  .hamburger { display: inline-flex; align-items: center; justify-content: center; }
 
-  /* Main sans margin */
-  .main { margin-left: 0; padding: 16px 16px calc(80px + env(safe-area-inset-bottom)) 16px; }
+  /* Sidebar drawer */
+  .sidebar { transform: translateX(-100%); transition: transform .3s ease; z-index: 100; width: 260px; }
+  .sidebar.open { transform: translateX(0); }
 
-  /* Top bar épurée */
+  /* Main pleine largeur */
+  .main { margin-left: 0; padding: 16px; }
+
+  /* Top bar mobile */
   .mobile-topbar {
     display: flex;
     align-items: center;
@@ -316,50 +319,8 @@ margin-bottom:20px;
     z-index: 90;
     margin: -16px -16px 16px -16px;
   }
-  .mobile-topbar-title {
-    font-family: var(--font-display);
-    font-size: 1rem;
-    color: var(--gold);
-  }
-  .mobile-user-badge {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.78rem;
-    color: var(--white-dim);
-  }
-
-  /* Bottom nav visible */
-  .bottom-nav {
-    display: flex;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: var(--black-mid);
-    border-top: 1px solid var(--border);
-    padding-bottom: env(safe-area-inset-bottom);
-    z-index: 100;
-  }
-  .bottom-nav-item {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 10px 4px 8px;
-    cursor: pointer;
-    transition: all .15s;
-    min-height: 56px;
-    gap: 3px;
-    border: none;
-    background: transparent;
-    color: var(--white-dim);
-    font-family: var(--font-body);
-  }
-  .bottom-nav-item.active { color: var(--gold); }
-  .bottom-nav-item .nav-icon { font-size: 1.3rem; line-height: 1; }
-  .bottom-nav-item .nav-label { font-size: 0.6rem; letter-spacing: 0.5px; text-transform: uppercase; font-weight: 600; }
+  .mobile-topbar-title { font-family: var(--font-display); font-size: 1rem; color: var(--gold); }
+  .mobile-user-badge { display: flex; align-items: center; gap: 8px; font-size: 0.78rem; color: var(--white-dim); }
 
   /* Touch targets minimum 44px */
   .btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
@@ -421,12 +382,7 @@ margin-bottom:20px;
   .pin-dot { width: 16px; height: 16px; }
 
   /* Toast */
-  .toast {
-    left: 16px;
-    right: 16px;
-    bottom: calc(80px + env(safe-area-inset-bottom) + 8px);
-    width: auto;
-  }
+  .toast { left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); width: auto; }
 
   /* Section title */
   .section-title { flex-direction: column; align-items: flex-start; gap: 8px; }
@@ -1465,7 +1421,6 @@ const [db, setDb] = useState({ stations:[], users:[], trucks:[], deliveries:[], 
 const [loading, setLoading] = useState(true);
 const [sidebarOpen, setSidebarOpen] = useState(false);
 const [toastMsg, setToastMsg] = useState(null);
-const [moreOpen, setMoreOpen] = useState(false);
 
 const refreshDb = useCallback(async () => {
   const data = await loadDb();
@@ -1515,14 +1470,7 @@ const nav = [
 
 const sections = [...new Set(nav.map(n => n.section))];
 
-// Mobile bottom tabs : 4 principaux + onglet "Plus"
-const primaryTabs = [
-  { id: "dashboard", label: "Dashboard", icon: "📊" },
-  ...(!isAdmin ? [{ id: "sale", label: "Vente", icon: "⛽" }] : []),
-  { id: "stock", label: "Stock", icon: "📦" },
-  { id: "deliveries", label: "Livraisons", icon: "🚛" },
-].slice(0, 4);
-const moreTabs = nav.filter(n => !primaryTabs.find(p => p.id === n.id));
+
 
 return (
 <>
@@ -1564,11 +1512,11 @@ return (
     {/* MAIN */}
     <main className="main">
       <div className="mobile-topbar">
+        <button className="hamburger" onClick={() => setSidebarOpen(o => !o)}>☰</button>
         <span className="mobile-topbar-title">⛽ FuelPro</span>
         <div className="mobile-user-badge">
           <span style={{fontWeight:600}}>{user.name.split(' ')[0]}</span>
           <span style={{color:'var(--gold)', fontSize:'0.7rem', textTransform:'uppercase', letterSpacing:'1px'}}>{user.role}</span>
-          <button className="btn btn-outline btn-sm" style={{padding:'4px 10px', fontSize:'0.7rem'}} onClick={() => setUser(null)}>✕</button>
         </div>
       </div>
       {page === "dashboard" && <Dashboard user={user} db={db} />}
@@ -1583,40 +1531,7 @@ return (
     </main>
   </div>
 
-  <nav className="bottom-nav">
-    {primaryTabs.map(t => (
-      <button key={t.id} className={`bottom-nav-item ${page === t.id ? "active" : ""}`} onClick={() => { setPage(t.id); setMoreOpen(false); }}>
-        <span className="nav-icon">{t.icon}</span>
-        <span className="nav-label">{t.label}</span>
-      </button>
-    ))}
-    <button className={`bottom-nav-item ${moreTabs.some(t => t.id === page) ? "active" : ""}`} onClick={() => setMoreOpen(o => !o)}>
-      <span className="nav-icon">···</span>
-      <span className="nav-label">Plus</span>
-    </button>
-  </nav>
 
-  {moreOpen && (
-    <>
-      <div className="more-sheet-overlay" onClick={() => setMoreOpen(false)} />
-      <div className="more-sheet">
-        <div className="more-sheet-handle" />
-        <div className="more-sheet-title">Plus</div>
-        {moreTabs.map(t => (
-          <button key={t.id} className={`more-sheet-item ${page === t.id ? "active" : ""}`}
-            onClick={() => { setPage(t.id); setMoreOpen(false); }}>
-            <span className="more-icon">{t.icon}</span>
-            {t.label}
-          </button>
-        ))}
-        <button className="more-sheet-item" style={{color:"#fc8181",marginTop:8,borderTop:"1px solid rgba(201,168,76,0.1)",paddingTop:16}}
-          onClick={() => { setMoreOpen(false); setUser(null); }}>
-          <span className="more-icon">🚪</span>
-          Déconnexion
-        </button>
-      </div>
-    </>
-  )}
 
   {toastMsg && <Toast msg={toastMsg.msg} type={toastMsg.type} onClose={() => setToastMsg(null)} />}
 </>
