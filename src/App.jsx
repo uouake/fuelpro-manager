@@ -1465,6 +1465,7 @@ const [db, setDb] = useState({ stations:[], users:[], trucks:[], deliveries:[], 
 const [loading, setLoading] = useState(true);
 const [sidebarOpen, setSidebarOpen] = useState(false);
 const [toastMsg, setToastMsg] = useState(null);
+const [moreOpen, setMoreOpen] = useState(false);
 
 const refreshDb = useCallback(async () => {
   const data = await loadDb();
@@ -1515,7 +1516,6 @@ const nav = [
 const sections = [...new Set(nav.map(n => n.section))];
 
 // Mobile bottom tabs : 4 principaux + onglet "Plus"
-const [moreOpen, setMoreOpen] = useState(false);
 const primaryTabs = [
   { id: "dashboard", label: "Dashboard", icon: "📊" },
   ...(!isAdmin ? [{ id: "sale", label: "Vente", icon: "⛽" }] : []),
