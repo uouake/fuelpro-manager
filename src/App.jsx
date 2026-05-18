@@ -287,32 +287,28 @@ margin-bottom:20px;
   .grid-3 { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* ── BOTTOM TAB BAR ── */
+.bottom-nav {
+  display: none;
+}
+
 /* ── MOBILE (< 768px) ── */
 @media (max-width: 767px) {
-  /* Hamburger visible */
-  .hamburger { display: inline-flex; align-items: center; justify-content: center; }
+  /* Cacher la sidebar complètement sur mobile */
+  .sidebar { display: none !important; }
+  .sidebar-overlay { display: none !important; }
+  .hamburger { display: none !important; }
 
-  /* Sidebar devient un drawer */
-  .sidebar {
-    transform: translateX(-100%);
-    transition: transform .3s ease;
-    z-index: 100;
-    width: 260px;
-  }
-  .sidebar.open { transform: translateX(0); }
+  /* Main sans margin */
+  .main { margin-left: 0; padding: 16px 16px calc(80px + env(safe-area-inset-bottom)) 16px; }
 
-  /* Main prend toute la largeur */
-  .main {
-    margin-left: 0;
-    padding: 16px;
-  }
-
-  /* Top bar mobile */
+  /* Top bar épurée */
   .mobile-topbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
     background: var(--black-mid);
     border-bottom: 1px solid var(--border);
     position: sticky;
@@ -333,12 +329,74 @@ margin-bottom:20px;
     color: var(--white-dim);
   }
 
+  /* Bottom nav visible */
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--black-mid);
+    border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom);
+    z-index: 100;
+  }
+  .bottom-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 4px 8px;
+    cursor: pointer;
+    transition: all .15s;
+    min-height: 56px;
+    gap: 3px;
+    border: none;
+    background: transparent;
+    color: var(--white-dim);
+    font-family: var(--font-body);
+  }
+  .bottom-nav-item.active { color: var(--gold); }
+  .bottom-nav-item .nav-icon { font-size: 1.3rem; line-height: 1; }
+  .bottom-nav-item .nav-label { font-size: 0.6rem; letter-spacing: 0.5px; text-transform: uppercase; font-weight: 600; }
+
+  /* Touch targets minimum 44px */
+  .btn { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+  .pin-btn { min-height: 64px; font-size: 1.6rem; }
+
+  /* Inputs plus grands */
+  .form-group input, .form-group select, .form-group textarea {
+    min-height: 48px;
+    font-size: 1rem;
+  }
+
+  /* Nav items */
+  .nav-item { min-height: 48px; }
+
+  /* Stat values */
+  .stat-value { font-size: 1.8rem; }
+
+  /* Page title */
+  .page-header h2 { font-size: 1.5rem; }
+
+  /* Badges plus lisibles */
+  .badge { font-size: 0.72rem; padding: 4px 10px; }
+
+  /* Table cells touch-friendly */
+  td, th { padding: 10px 8px; }
+
+  /* Card padding */
+  .card { padding: 16px; }
+
+  /* Sale amount plus grand */
+  .sale-amount { font-size: 2.4rem; padding: 24px 16px; }
+
+  /* Modal full bottom sheet */
+  .modal { padding: 28px 20px 32px; }
+
   /* Grilles */
   .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
-
-  /* Page header */
-  .page-header h2 { font-size: 1.4rem; }
-  .stat-value { font-size: 1.6rem; }
 
   /* Forms */
   .form-row { flex-direction: column; }
@@ -347,7 +405,6 @@ margin-bottom:20px;
   .modal-overlay { padding: 0; align-items: flex-end; }
   .modal {
     border-radius: 16px 16px 0 0;
-    padding: 24px 20px;
     max-height: 90vh;
     overflow-y: auto;
     max-width: 100%;
@@ -356,21 +413,18 @@ margin-bottom:20px;
   .modal-footer .btn { width: 100%; text-align: center; }
 
   /* PIN screen */
-  .pin-box {
-    width: 100%;
-    max-width: 360px;
-    padding: 32px 24px;
-    margin: 16px;
-  }
-
-  /* Sale amount */
-  .sale-amount { font-size: 2rem; }
+  .pin-screen { padding: 0 16px; align-items: center; }
+  .pin-box { width: 100%; max-width: 360px; padding: 40px 24px; border-radius: 20px; margin: 0; }
+  .pin-logo { font-size: 1.8rem; }
+  .pin-grid { gap: 12px; }
+  .pin-dots { gap: 20px; margin-bottom: 32px; }
+  .pin-dot { width: 16px; height: 16px; }
 
   /* Toast */
   .toast {
     left: 16px;
     right: 16px;
-    bottom: 16px;
+    bottom: calc(80px + env(safe-area-inset-bottom) + 8px);
     width: auto;
   }
 
@@ -380,12 +434,6 @@ margin-bottom:20px;
 
   /* Map */
   .map-container { height: 280px; }
-
-  /* Tables — font légèrement réduit */
-  th, td { padding: 8px 10px; font-size: 0.82rem; }
-
-  /* Card padding réduit */
-  .card { padding: 14px; }
 }
 `;
 
@@ -1452,6 +1500,15 @@ const isVendor = user.role === "vendeur";
 const isGerant = user.role === "gérant";
 const isAdmin = user.role === "admin";
 
+// Mobile bottom tabs (max 5 items)
+const mobileTabs = [
+  { id: "dashboard", label: "Dashboard", icon: "📊" },
+  ...(!isAdmin ? [{ id: "sale", label: "Vente", icon: "⛽" }] : []),
+  { id: "stock", label: "Stock", icon: "📦" },
+  { id: "deliveries", label: "Livraisons", icon: "🚛" },
+  { id: "trucks", label: "Camions", icon: "🔧" },
+].slice(0, 5);
+
 const nav = [
 { id: "dashboard", label: "Dashboard", icon: "📊", section: "Navigation", show: true },
 { id: "sale", label: "Vente Essence", icon: "⛽", section: "Navigation", show: !isAdmin },
@@ -1506,11 +1563,11 @@ return (
     {/* MAIN */}
     <main className="main">
       <div className="mobile-topbar">
-        <button className="hamburger" onClick={() => setSidebarOpen(o => !o)}>☰</button>
         <span className="mobile-topbar-title">⛽ FuelPro</span>
         <div className="mobile-user-badge">
-          <span>{user.name.split(' ')[0]}</span>
-          <span style={{color:'var(--gold)', fontSize:'0.7rem'}}>{user.role}</span>
+          <span style={{fontWeight:600}}>{user.name.split(' ')[0]}</span>
+          <span style={{color:'var(--gold)', fontSize:'0.7rem', textTransform:'uppercase', letterSpacing:'1px'}}>{user.role}</span>
+          <button className="btn btn-outline btn-sm" style={{padding:'4px 10px', fontSize:'0.7rem'}} onClick={() => setUser(null)}>✕</button>
         </div>
       </div>
       {page === "dashboard" && <Dashboard user={user} db={db} />}
@@ -1524,6 +1581,15 @@ return (
       {page === "reports" && (isGerant || isAdmin) && <Reports user={user} db={db} />}
     </main>
   </div>
+
+  <nav className="bottom-nav">
+    {mobileTabs.map(t => (
+      <button key={t.id} className={`bottom-nav-item ${page === t.id ? "active" : ""}`} onClick={() => setPage(t.id)}>
+        <span className="nav-icon">{t.icon}</span>
+        <span className="nav-label">{t.label}</span>
+      </button>
+    ))}
+  </nav>
 
   {toastMsg && <Toast msg={toastMsg.msg} type={toastMsg.type} onClose={() => setToastMsg(null)} />}
 </>
