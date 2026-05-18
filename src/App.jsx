@@ -621,7 +621,10 @@ return (
       <div className="form-row">
         <div className="form-group">
           <label>Volume (litres)</label>
-          <input type="number" min="1" max="1000" value={volume} onChange={(e) => setVolume(e.target.value)} placeholder="Ex: 30 (max 1 000 L)" />
+          <input type="number" min="1" max="1000" value={volume} onChange={(e) => setVolume(e.target.value)} placeholder="Ex: 30 (max 1 000 L)" style={{borderColor: parseFloat(volume) > 1000 ? "#fc8181" : ""}} />
+          {parseFloat(volume) > 1000 && (
+            <span style={{color:"#fc8181",fontSize:"0.78rem",marginTop:4}}>⚠️ Maximum 1 000 L par vente</span>
+          )}
         </div>
         <div className="form-group">
           <label>Mode de paiement</label>
@@ -635,7 +638,7 @@ return (
       <div style={{padding:"12px",background:"var(--black-soft)",borderRadius:6,marginBottom:20,fontSize:"0.85rem",color:"var(--white-dim)"}}>
         Stock disponible : <strong style={{color: station?.stock < 1000 ? "#fc8181" : "var(--gold)"}}>{fmt(station?.stock)} L</strong>
       </div>
-      <button className="btn btn-gold" style={{width:"100%",padding:"16px",fontSize:"1rem"}} onClick={submit}>
+      <button className="btn btn-gold" style={{width:"100%",padding:"16px",fontSize:"1rem",opacity: parseFloat(volume) > 1000 ? 0.4 : 1, cursor: parseFloat(volume) > 1000 ? "not-allowed" : "pointer"}} onClick={submit} disabled={parseFloat(volume) > 1000}>
         ✓ Enregistrer la vente
       </button>
     </div>
