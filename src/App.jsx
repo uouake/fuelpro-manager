@@ -1130,8 +1130,8 @@ return (
               <td style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {isAdmin ? (
                   <>
-                    <button className="btn btn-outline btn-sm" onClick={() => openEdit(u)}>Éditer</button>
-                    {u.id !== user.id && <button className="btn btn-danger btn-sm" onClick={() => handleDeleteUser(u.id)}>Supprimer</button>}
+                    <button className="btn btn-outline btn-sm" onClick={() => openEdit(u)} title="Éditer">✏️</button>
+                    {u.id !== user.id && <button className="btn btn-danger btn-sm" onClick={() => handleDeleteUser(u.id)} title="Supprimer">🗑️</button>}
                   </>
                 ) : (
                   <span style={{color:"var(--white-dim)",fontSize:"0.75rem"}}>--</span>
@@ -1254,8 +1254,8 @@ return (
         <div style={{display:"flex",gap:8}}>
           {user.role === "admin" && (
             <>
-              <button className="btn btn-outline btn-sm" onClick={() => openEdit(s)}>Modifier</button>
-              <button className="btn btn-danger btn-sm" onClick={() => handleDeleteStation(s.id)}>Supprimer</button>
+              <button className="btn btn-outline btn-sm" onClick={() => openEdit(s)} title="Modifier">✏️</button>
+              <button className="btn btn-danger btn-sm" onClick={() => handleDeleteStation(s.id)} title="Supprimer">🗑️</button>
             </>
           )}
         </div>
