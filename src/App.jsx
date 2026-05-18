@@ -4,6 +4,7 @@ import {
   insertSale, updateStation, insertStation, deleteStation,
   updateDelivery, insertDelivery, updateTruck, insertTruck, deleteTruck,
   insertUser, updateUser, deleteUser,
+  insertStockAdjustment, loadStockAdjustments,
 } from './lib/db';
 
 // ─── STYLES ───────────────────────────────────────────────────────────────────
@@ -589,6 +590,7 @@ const amount = volume ? Math.round(parseFloat(volume) * (station?.pricePerLiter 
 const submit = async () => {
 const v = parseFloat(volume);
 if (!v || v <= 0) { toast("Entrez un volume valide", "error"); return; }
+if (v > 1000) { toast("Volume maximum : 1 000 L par vente", "error"); return; }
 if (v > station.stock) { toast("Stock insuffisant !", "error"); return; }
 try {
   await insertSale({
@@ -619,7 +621,7 @@ return (
       <div className="form-row">
         <div className="form-group">
           <label>Volume (litres)</label>
-          <input type="number" min="1" value={volume} onChange={(e) => setVolume(e.target.value)} placeholder="Ex: 30" />
+          <input type="number" min="1" max="1000" value={volume} onChange={(e) => setVolume(e.target.value)} placeholder="Ex: 30 (max 1 000 L)" />
         </div>
         <div className="form-group">
           <label>Mode de paiement</label>
@@ -660,11 +662,42 @@ return (
 }
 
 // ─── STOCK ────────────────────────────────────────────────────────────────────
-function Stock({ user, db }) {
-const stations = user.role === "admin" ? db.stations : db.stations.filter((s) => s.id === user.stationId);
+function Stock({ user, db, toast, refreshDb }) {
+const isAdmin = user.role === "admin";
+const stations = isAdmin ? db.stations : db.stations.filter((s) => s.id === user.stationId);
+const [adjustModal, setAdjustModal] = useState(null); // station cible
+const [newStock, setNewStock] = useState("");
+const [reason, setReason] = useState("");
+const [logs, setLogs] = useState([]);
+const [showLogs, setShowLogs] = useState(false);
+
+const openAdjust = (s) => { setAdjustModal(s); setNewStock(String(s.stock)); setReason(""); };
+
+const submitAdjust = async () => {
+  const val = parseFloat(newStock);
+  if (isNaN(val) || val < 0) { toast("Valeur de stock invalide", "error"); return; }
+  if (val > adjustModal.capacity) { toast(`Dépasse la capacité (${fmt(adjustModal.capacity)} L)`, "error"); return; }
+  try {
+    await insertStockAdjustment({ stationId: adjustModal.id, adminId: user.id, oldStock: adjustModal.stock, newStock: val, reason });
+    await updateStation(adjustModal.id, { stock: val });
+    await refreshDb();
+    toast(`Stock mis à jour : ${fmt(val)} L ✓`, "success");
+    setAdjustModal(null);
+  } catch(e) { toast("Erreur : " + e.message, "error"); }
+};
+
+const fetchLogs = async () => {
+  const data = await loadStockAdjustments();
+  setLogs(data);
+  setShowLogs(true);
+};
+
 return (
 <div>
-<div className="page-header"><h2>Gestion du Stock</h2><div className="gold-line" /></div>
+<div className="page-header" style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+  <div><h2>Gestion du Stock</h2><div className="gold-line" /></div>
+  {isAdmin && <button className="btn btn-outline" onClick={fetchLogs}>📋 Historique</button>}
+</div>
 <div className="grid-2">
 {stations.map((s) => {
 const pct = Math.round((s.stock / s.capacity) * 100);
@@ -690,14 +723,84 @@ return (
 <div className="progress-fill" style={{width:`${pct}%`,background: lvl==="critique" ? "#fc8181" : lvl==="faible" ? "var(--gold)" : "#68d391"}} />
 </div>
 <div style={{textAlign:"right",marginTop:6,fontSize:"0.75rem",color:"var(--white-dim)"}}>{pct}% de capacité</div>
-<div style={{marginTop:16,padding:"10px 14px",background:"var(--black-soft)",borderRadius:6,display:"flex",justifyContent:"space-between"}}>
-<span style={{fontSize:"0.8rem",color:"var(--white-dim)"}}>Prix/litre</span>
-<span style={{color:"var(--gold)",fontWeight:700}}>{fmt(s.pricePerLiter)} FCFA</span>
+<div style={{marginTop:16,padding:"10px 14px",background:"var(--black-soft)",borderRadius:6,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+<div>
+  <span style={{fontSize:"0.8rem",color:"var(--white-dim)"}}>Prix/litre</span>
+  <span style={{color:"var(--gold)",fontWeight:700,marginLeft:8}}>{fmt(s.pricePerLiter)} FCFA</span>
+</div>
+{isAdmin && <button className="btn btn-outline btn-sm" onClick={() => openAdjust(s)}>Ajuster</button>}
 </div>
 </div>
 );
 })}
 </div>
+
+{/* MODAL AJUSTEMENT */}
+{adjustModal && (
+<div className="modal-overlay" onClick={() => setAdjustModal(null)}>
+<div className="modal" onClick={e => e.stopPropagation()}>
+  <h3>Ajuster le stock — {adjustModal.name}</h3>
+  <p style={{color:"var(--white-dim)",fontSize:"0.85rem",marginBottom:20}}>
+    Stock actuel : <strong style={{color:"var(--gold)"}}>{fmt(adjustModal.stock)} L</strong> / Capacité : {fmt(adjustModal.capacity)} L
+  </p>
+  <div className="form-row">
+    <div className="form-group">
+      <label>Nouveau stock (litres)</label>
+      <input type="number" min="0" max={adjustModal.capacity} value={newStock} onChange={e => setNewStock(e.target.value)} />
+    </div>
+  </div>
+  <div className="form-group" style={{marginBottom:16}}>
+    <label>Motif (optionnel)</label>
+    <input type="text" value={reason} onChange={e => setReason(e.target.value)} placeholder="Ex: correction après inventaire physique" />
+  </div>
+  {newStock !== "" && !isNaN(parseFloat(newStock)) && (
+    <div style={{padding:"10px 14px",background:"var(--black-soft)",borderRadius:6,marginBottom:16,fontSize:"0.85rem"}}>
+      Variation : <strong style={{color: parseFloat(newStock) >= adjustModal.stock ? "#68d391" : "#fc8181"}}>
+        {parseFloat(newStock) >= adjustModal.stock ? "+" : ""}{fmt(parseFloat(newStock) - adjustModal.stock)} L
+      </strong>
+    </div>
+  )}
+  <div className="modal-footer">
+    <button className="btn btn-outline" onClick={() => setAdjustModal(null)}>Annuler</button>
+    <button className="btn btn-gold" onClick={submitAdjust}>Enregistrer</button>
+  </div>
+</div>
+</div>
+)}
+
+{/* PANEL HISTORIQUE */}
+{showLogs && (
+<div style={{marginTop:28}}>
+  <div className="section-title">
+    <h3>📋 Historique des ajustements de stock</h3>
+    <button className="btn btn-outline btn-sm" onClick={() => setShowLogs(false)}>Fermer</button>
+  </div>
+  {logs.length === 0 ? (
+    <div className="empty-state"><div className="icon">📋</div><p>Aucun ajustement enregistré</p></div>
+  ) : (
+  <div className="card">
+    <div className="table-wrap">
+    <table>
+      <thead><tr><th>Date</th><th>Station</th><th>Admin</th><th>Avant</th><th>Après</th><th>Variation</th><th>Motif</th></tr></thead>
+      <tbody>
+        {logs.map(l => (
+          <tr key={l.id}>
+            <td style={{whiteSpace:"nowrap"}}>{new Date(l.createdAt).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"})}</td>
+            <td style={{fontWeight:600}}>{l.stationName}</td>
+            <td>{l.adminName}</td>
+            <td style={{color:"var(--white-dim)"}}>{fmt(l.oldStock)} L</td>
+            <td style={{color:"var(--gold)",fontWeight:600}}>{fmt(l.newStock)} L</td>
+            <td><span className={`badge ${l.delta >= 0 ? "badge-green" : "badge-red"}`}>{l.delta >= 0 ? "+" : ""}{fmt(l.delta)} L</span></td>
+            <td style={{color:"var(--white-dim)",fontSize:"0.82rem"}}>{l.reason || "--"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+    </div>
+  </div>
+  )}
+</div>
+)}
 </div>
 );
 }
@@ -1409,7 +1512,7 @@ return (
       </div>
       {page === "dashboard" && <Dashboard user={user} db={db} />}
       {page === "sale" && !isAdmin && <SaleForm user={user} db={db} onSave={refreshDb} toast={toast} />}
-      {page === "stock" && <Stock user={user} db={db} />}
+      {page === "stock" && <Stock user={user} db={db} toast={toast} refreshDb={refreshDb} />}
       {page === "deliveries" && <Deliveries user={user} db={db} onSave={refreshDb} toast={toast} />}
       {page === "trucks" && <Trucks user={user} db={db} onSave={refreshDb} toast={toast} />}
       {page === "personnel" && (isGerant || isAdmin) && <Personnel user={user} db={db} onSave={refreshDb} toast={toast} />}

@@ -170,3 +170,34 @@ export async function insertSale(data) {
   }).select().single()
   return row
 }
+
+// ─── STOCK ADJUSTMENTS ────────────────────────────────────────────────────────
+export async function insertStockAdjustment({ stationId, adminId, oldStock, newStock, reason }) {
+  await supabase.from('stock_adjustments').insert({
+    station_id: stationId,
+    admin_id: adminId,
+    old_stock: oldStock,
+    new_stock: newStock,
+    reason: reason || null,
+  });
+}
+
+export async function loadStockAdjustments(stationId = null) {
+  let q = supabase
+    .from('stock_adjustments')
+    .select('*, stations(name), users(name)')
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (stationId) q = q.eq('station_id', stationId);
+  const { data } = await q;
+  return (data || []).map(r => ({
+    id: r.id,
+    stationName: r.stations?.name,
+    adminName: r.users?.name,
+    oldStock: parseFloat(r.old_stock),
+    newStock: parseFloat(r.new_stock),
+    delta: parseFloat(r.delta),
+    reason: r.reason,
+    createdAt: r.created_at,
+  }));
+}
