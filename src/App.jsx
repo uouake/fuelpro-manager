@@ -948,24 +948,43 @@ return (
 
 // ─── PERSONNEL ────────────────────────────────────────────────────────────────
 function Personnel({ user, db, onSave, toast }) {
+const isAdmin = user.role === "admin";
 const [showModal, setShowModal] = useState(false);
-const [form, setForm] = useState({ name: "", pin: "", role: "vendeur", stationId: user.stationId || "" });
+const [editTarget, setEditTarget] = useState(null);
+const emptyForm = { name: "", pin: "", newPin: "", role: "vendeur", stationId: db.stations[0]?.id || "" };
+const [form, setForm] = useState(emptyForm);
 
-const myUsers = user.role === "admin" ? db.users : db.users.filter(u => u.stationId === user.stationId);
+const myUsers = isAdmin ? db.users : db.users.filter(u => u.stationId === user.stationId);
 
-const addUser = () => {
-if (!form.name || form.pin.length !== 4) { toast("Nom et PIN 4 chiffres requis", "error"); return; }
-if (db.users.find(u => u.pin === form.pin)) { toast("Ce PIN est déjà utilisé", "error"); return; }
-const nu = { id: nextId(db.users), name: form.name, pin: form.pin, role: form.role, stationId: +form.stationId };
-onSave({ ...db, users: [...db.users, nu] });
-toast("Utilisateur ajouté ✓", "success");
-setShowModal(false);
+const openAdd = () => { setEditTarget(null); setForm(emptyForm); setShowModal(true); };
+const openEdit = (u) => { setEditTarget(u); setForm({ name: u.name, pin: "", newPin: "", role: u.role, stationId: u.stationId || "" }); setShowModal(true); };
+
+const saveUser = () => {
+  if (editTarget) {
+    if (!form.name) { toast("Nom requis", "error"); return; }
+    if (form.newPin && form.newPin.length !== 4) { toast("Nouveau PIN doit faire 4 chiffres", "error"); return; }
+    if (form.newPin && db.users.find(u => u.pin === form.newPin && u.id !== editTarget.id)) { toast("Ce PIN est déjà utilisé", "error"); return; }
+    const updated = db.users.map(u => u.id === editTarget.id ? {
+      ...u, name: form.name, role: form.role,
+      stationId: form.stationId ? +form.stationId : null,
+      ...(form.newPin ? { pin: form.newPin } : {})
+    } : u);
+    onSave({ ...db, users: updated });
+    toast("Employé mis à jour ✓", "success");
+  } else {
+    if (!form.name || form.pin.length !== 4) { toast("Nom et PIN 4 chiffres requis", "error"); return; }
+    if (db.users.find(u => u.pin === form.pin)) { toast("Ce PIN est déjà utilisé", "error"); return; }
+    const nu = { id: nextId(db.users), name: form.name, pin: form.pin, role: form.role, stationId: +form.stationId };
+    onSave({ ...db, users: [...db.users, nu] });
+    toast("Utilisateur ajouté ✓", "success");
+  }
+  setShowModal(false);
 };
 
 const deleteUser = (id) => {
-if (id === user.id) { toast("Impossible de vous supprimer vous-même", "error"); return; }
-onSave({ ...db, users: db.users.filter(u => u.id !== id) });
-toast("Utilisateur supprimé", "success");
+  if (id === user.id) { toast("Impossible de vous supprimer vous-même", "error"); return; }
+  onSave({ ...db, users: db.users.filter(u => u.id !== id) });
+  toast("Utilisateur supprimé", "success");
 };
 
 const roleColors = { admin: "badge-red", gérant: "badge-yellow", vendeur: "badge-blue" };
@@ -974,12 +993,11 @@ return (
 <div>
 <div className="page-header" style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
 <div><h2>Personnel</h2><div className="gold-line" /></div>
-{(user.role === "gérant" || user.role === "admin") && (
-<button className="btn btn-gold" onClick={() => setShowModal(true)}>+ Ajouter</button>
-)}
+{isAdmin && <button className="btn btn-gold" onClick={openAdd}>+ Ajouter</button>}
 </div>
 
   <div className="card">
+    <div className="table-wrap">
     <table>
       <thead><tr><th>Nom</th><th>Rôle</th><th>Station</th><th>PIN</th><th>Actions</th></tr></thead>
       <tbody>
@@ -991,9 +1009,14 @@ return (
               <td><span className={`badge ${roleColors[u.role]}`}>{u.role}</span></td>
               <td>{st?.name || "--"}</td>
               <td style={{letterSpacing:4,color:"var(--white-dim)"}}>{"●●●●"}</td>
-              <td>
-                {u.id !== user.id && (user.role === "gérant" || user.role === "admin") && (
-                  <button className="btn btn-danger btn-sm" onClick={() => deleteUser(u.id)}>Supprimer</button>
+              <td style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {isAdmin ? (
+                  <>
+                    <button className="btn btn-outline btn-sm" onClick={() => openEdit(u)}>Éditer</button>
+                    {u.id !== user.id && <button className="btn btn-danger btn-sm" onClick={() => deleteUser(u.id)}>Supprimer</button>}
+                  </>
+                ) : (
+                  <span style={{color:"var(--white-dim)",fontSize:"0.75rem"}}>--</span>
                 )}
               </td>
             </tr>
@@ -1001,20 +1024,30 @@ return (
         })}
       </tbody>
     </table>
+    </div>
   </div>
 
   {showModal && (
     <div className="modal-overlay" onClick={() => setShowModal(false)}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3>Ajouter un employé</h3>
+        <h3>{editTarget ? "Éditer l\'employé" : "Ajouter un employé"}</h3>
         <div className="form-row">
           <div className="form-group">
             <label>Nom complet</label>
-            <input value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} />
+            <input value={form.name} placeholder="Prénom Nom" onChange={(e) => setForm({...form, name: e.target.value})} />
           </div>
           <div className="form-group">
-            <label>Code PIN (4 chiffres)</label>
-            <input type="password" maxLength={4} value={form.pin} onChange={(e) => setForm({...form, pin: e.target.value.replace(/\D/,"")})} />
+            {editTarget ? (
+              <>
+                <label>Nouveau PIN (vide = inchangé)</label>
+                <input type="password" maxLength={4} value={form.newPin} placeholder="····" onChange={(e) => setForm({...form, newPin: e.target.value.replace(/\D/g,"")})} />
+              </>
+            ) : (
+              <>
+                <label>Code PIN (4 chiffres)</label>
+                <input type="password" maxLength={4} value={form.pin} onChange={(e) => setForm({...form, pin: e.target.value.replace(/\D/g,"")})} />
+              </>
+            )}
           </div>
         </div>
         <div className="form-row">
@@ -1023,13 +1056,14 @@ return (
             <select value={form.role} onChange={(e) => setForm({...form, role: e.target.value})}>
               <option>vendeur</option>
               <option>gérant</option>
-              {user.role === "admin" && <option>admin</option>}
+              <option>admin</option>
             </select>
           </div>
           <div className="form-group">
             <label>Station</label>
             <select value={form.stationId} onChange={(e) => setForm({...form, stationId: e.target.value})}>
-              {(user.role === "admin" ? db.stations : db.stations.filter(s => s.id === user.stationId)).map(s => (
+              <option value="">-- Aucune --</option>
+              {db.stations.map(s => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
@@ -1037,7 +1071,7 @@ return (
         </div>
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={() => setShowModal(false)}>Annuler</button>
-          <button className="btn btn-gold" onClick={addUser}>Ajouter</button>
+          <button className="btn btn-gold" onClick={saveUser}>{editTarget ? "Enregistrer" : "Ajouter"}</button>
         </div>
       </div>
     </div>
