@@ -244,6 +244,142 @@ margin-bottom:20px;
 
 .empty-state { text-align:center; padding:40px; color:var(--white-dim); }
 .empty-state .icon { font-size:2.5rem; margin-bottom:12px; }
+
+/* ══════════════════════════════════════════
+   RESPONSIVE — Mobile-first breakpoints
+   ══════════════════════════════════════════ */
+
+/* ── HAMBURGER BUTTON (mobile only) ── */
+.hamburger {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--gold);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 6px 10px;
+  line-height: 1;
+  transition: all .2s;
+}
+.hamburger:hover { background: rgba(201,168,76,0.1); }
+
+/* ── SIDEBAR OVERLAY (mobile) ── */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 99;
+}
+.sidebar-overlay.open { display: block; }
+
+/* ── TABLET (768px – 1024px) ── */
+@media (max-width: 1024px) {
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── MOBILE (< 768px) ── */
+@media (max-width: 767px) {
+  /* Hamburger visible */
+  .hamburger { display: inline-flex; align-items: center; justify-content: center; }
+
+  /* Sidebar devient un drawer */
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform .3s ease;
+    z-index: 100;
+    width: 260px;
+  }
+  .sidebar.open { transform: translateX(0); }
+
+  /* Main prend toute la largeur */
+  .main {
+    margin-left: 0;
+    padding: 16px;
+  }
+
+  /* Top bar mobile */
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--black-mid);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    margin: -16px -16px 16px -16px;
+  }
+  .mobile-topbar-title {
+    font-family: var(--font-display);
+    font-size: 1rem;
+    color: var(--gold);
+  }
+  .mobile-user-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.78rem;
+    color: var(--white-dim);
+  }
+
+  /* Grilles */
+  .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
+
+  /* Page header */
+  .page-header h2 { font-size: 1.4rem; }
+  .stat-value { font-size: 1.6rem; }
+
+  /* Forms */
+  .form-row { flex-direction: column; }
+
+  /* Modal plein écran */
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal {
+    border-radius: 16px 16px 0 0;
+    padding: 24px 20px;
+    max-height: 90vh;
+    overflow-y: auto;
+    max-width: 100%;
+  }
+  .modal-footer { flex-direction: column-reverse; }
+  .modal-footer .btn { width: 100%; text-align: center; }
+
+  /* PIN screen */
+  .pin-box {
+    width: 100%;
+    max-width: 360px;
+    padding: 32px 24px;
+    margin: 16px;
+  }
+
+  /* Sale amount */
+  .sale-amount { font-size: 2rem; }
+
+  /* Toast */
+  .toast {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    width: auto;
+  }
+
+  /* Section title */
+  .section-title { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .section-title .btn { width: 100%; text-align: center; }
+
+  /* Map */
+  .map-container { height: 280px; }
+
+  /* Tables — font légèrement réduit */
+  th, td { padding: 8px 10px; font-size: 0.82rem; }
+
+  /* Card padding réduit */
+  .card { padding: 14px; }
+}
 `;
 
 // ─── INITIAL DATA ─────────────────────────────────────────────────────────────
@@ -1125,6 +1261,7 @@ export default function App() {
 const [user, setUser] = useState(null);
 const [page, setPage] = useState("dashboard");
 const [db, setDb] = useState(loadData);
+const [sidebarOpen, setSidebarOpen] = useState(false);
 const [toastMsg, setToastMsg] = useState(null);
 
 const saveDb = useCallback((newDb) => { setDb(newDb); saveData(newDb); }, []);
@@ -1160,10 +1297,12 @@ return (
 <style>{STYLES}</style>
 <div className="app">
 {/* SIDEBAR */}
-<aside className="sidebar">
+<div className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`} onClick={() => setSidebarOpen(false)} />
+<aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
 <div className="sidebar-logo">
 <h1>⛽ FuelPro</h1>
 <p>Gestion de Stations</p>
+<button className="hamburger" onClick={() => setSidebarOpen(o => !o)}>☰</button>
 </div>
 <div className="sidebar-user">
 <div className="sidebar-avatar">{user.name[0]}</div>
@@ -1177,7 +1316,7 @@ return (
 <div key={sec}>
 <div className="nav-section">{sec}</div>
 {nav.filter(n => n.section === sec).map(n => (
-<div key={n.id} className={`nav-item ${page === n.id ? "active" : ""}`} onClick={() => setPage(n.id)}>
+<div key={n.id} className={`nav-item ${page === n.id ? "active" : ""}`} onClick={() => { setPage(n.id); setSidebarOpen(false); }}>
 <span className="nav-icon">{n.icon}</span>
 {n.label}
 </div>
@@ -1192,6 +1331,14 @@ return (
 
     {/* MAIN */}
     <main className="main">
+      <div className="mobile-topbar">
+        <button className="hamburger" onClick={() => setSidebarOpen(o => !o)}>☰</button>
+        <span className="mobile-topbar-title">⛽ FuelPro</span>
+        <div className="mobile-user-badge">
+          <span>{user.name.split(' ')[0]}</span>
+          <span style={{color:'var(--gold)', fontSize:'0.7rem'}}>{user.role}</span>
+        </div>
+      </div>
       {page === "dashboard" && <Dashboard user={user} db={db} />}
       {page === "sale" && !isAdmin && <SaleForm user={user} db={db} onSave={saveDb} toast={toast} />}
       {page === "stock" && <Stock user={user} db={db} />}
