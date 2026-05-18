@@ -1500,14 +1500,15 @@ const isVendor = user.role === "vendeur";
 const isGerant = user.role === "gérant";
 const isAdmin = user.role === "admin";
 
-// Mobile bottom tabs (max 5 items)
-const mobileTabs = [
+// Mobile bottom tabs : 4 principaux + onglet "Plus"
+const [moreOpen, setMoreOpen] = useState(false);
+const primaryTabs = [
   { id: "dashboard", label: "Dashboard", icon: "📊" },
   ...(!isAdmin ? [{ id: "sale", label: "Vente", icon: "⛽" }] : []),
   { id: "stock", label: "Stock", icon: "📦" },
   { id: "deliveries", label: "Livraisons", icon: "🚛" },
-  { id: "trucks", label: "Camions", icon: "🔧" },
-].slice(0, 5);
+].slice(0, 4);
+const moreTabs = nav.filter(n => !primaryTabs.find(p => p.id === n.id));
 
 const nav = [
 { id: "dashboard", label: "Dashboard", icon: "📊", section: "Navigation", show: true },
@@ -1583,13 +1584,39 @@ return (
   </div>
 
   <nav className="bottom-nav">
-    {mobileTabs.map(t => (
-      <button key={t.id} className={`bottom-nav-item ${page === t.id ? "active" : ""}`} onClick={() => setPage(t.id)}>
+    {primaryTabs.map(t => (
+      <button key={t.id} className={`bottom-nav-item ${page === t.id ? "active" : ""}`} onClick={() => { setPage(t.id); setMoreOpen(false); }}>
         <span className="nav-icon">{t.icon}</span>
         <span className="nav-label">{t.label}</span>
       </button>
     ))}
+    <button className={`bottom-nav-item ${moreTabs.some(t => t.id === page) ? "active" : ""}`} onClick={() => setMoreOpen(o => !o)}>
+      <span className="nav-icon">···</span>
+      <span className="nav-label">Plus</span>
+    </button>
   </nav>
+
+  {moreOpen && (
+    <>
+      <div className="more-sheet-overlay" onClick={() => setMoreOpen(false)} />
+      <div className="more-sheet">
+        <div className="more-sheet-handle" />
+        <div className="more-sheet-title">Plus</div>
+        {moreTabs.map(t => (
+          <button key={t.id} className={`more-sheet-item ${page === t.id ? "active" : ""}`}
+            onClick={() => { setPage(t.id); setMoreOpen(false); }}>
+            <span className="more-icon">{t.icon}</span>
+            {t.label}
+          </button>
+        ))}
+        <button className="more-sheet-item" style={{color:"#fc8181",marginTop:8,borderTop:"1px solid rgba(201,168,76,0.1)",paddingTop:16}}
+          onClick={() => { setMoreOpen(false); setUser(null); }}>
+          <span className="more-icon">🚪</span>
+          Déconnexion
+        </button>
+      </div>
+    </>
+  )}
 
   {toastMsg && <Toast msg={toastMsg.msg} type={toastMsg.type} onClose={() => setToastMsg(null)} />}
 </>
