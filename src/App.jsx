@@ -1500,16 +1500,6 @@ const isVendor = user.role === "vendeur";
 const isGerant = user.role === "gérant";
 const isAdmin = user.role === "admin";
 
-// Mobile bottom tabs : 4 principaux + onglet "Plus"
-const [moreOpen, setMoreOpen] = useState(false);
-const primaryTabs = [
-  { id: "dashboard", label: "Dashboard", icon: "📊" },
-  ...(!isAdmin ? [{ id: "sale", label: "Vente", icon: "⛽" }] : []),
-  { id: "stock", label: "Stock", icon: "📦" },
-  { id: "deliveries", label: "Livraisons", icon: "🚛" },
-].slice(0, 4);
-const moreTabs = nav.filter(n => !primaryTabs.find(p => p.id === n.id));
-
 const nav = [
 { id: "dashboard", label: "Dashboard", icon: "📊", section: "Navigation", show: true },
 { id: "sale", label: "Vente Essence", icon: "⛽", section: "Navigation", show: !isAdmin },
@@ -1523,6 +1513,16 @@ const nav = [
 ].filter(n => n.show);
 
 const sections = [...new Set(nav.map(n => n.section))];
+
+// Mobile bottom tabs : 4 principaux + onglet "Plus"
+const [moreOpen, setMoreOpen] = useState(false);
+const primaryTabs = [
+  { id: "dashboard", label: "Dashboard", icon: "📊" },
+  ...(!isAdmin ? [{ id: "sale", label: "Vente", icon: "⛽" }] : []),
+  { id: "stock", label: "Stock", icon: "📦" },
+  { id: "deliveries", label: "Livraisons", icon: "🚛" },
+].slice(0, 4);
+const moreTabs = nav.filter(n => !primaryTabs.find(p => p.id === n.id));
 
 return (
 <>
