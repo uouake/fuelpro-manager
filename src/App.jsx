@@ -1,4 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
+import {
+  loadDb,
+  insertSale, updateStation, insertStation, deleteStation,
+  updateDelivery, insertDelivery, updateTruck, insertTruck, deleteTruck,
+  insertUser, updateUser, deleteUser,
+} from './lib/db';
 
 // ─── STYLES ───────────────────────────────────────────────────────────────────
 const STYLES = `
@@ -382,47 +388,10 @@ margin-bottom:20px;
 }
 `;
 
-// ─── INITIAL DATA ─────────────────────────────────────────────────────────────
-const INITIAL_DATA = {
-users: [
-{ id: 1, name: "Admin Système", pin: "0000", role: "admin", stationId: null },
-{ id: 2, name: "Kouamé Jean", pin: "1234", role: "gérant", stationId: 1 },
-{ id: 3, name: "Traoré Fatou", pin: "2222", role: "vendeur", stationId: 1 },
-{ id: 4, name: "Bamba Soro", pin: "3333", role: "gérant", stationId: 2 },
-{ id: 5, name: "Diallo Ibrahim", pin: "4444", role: "vendeur", stationId: 2 },
-],
-stations: [
-{ id: 1, name: "Station Plateau", city: "Abidjan", address: "Rue du Commerce, Plateau", lat: 5.3203, lng: -4.0185, pricePerLiter: 750, stock: 12000, capacity: 30000 },
-{ id: 2, name: "Station Cocody", city: "Abidjan", address: "Av. Christiani, Cocody", lat: 5.3467, lng: -3.9870, pricePerLiter: 745, stock: 8000, capacity: 25000 },
-{ id: 3, name: "Station Yopougon", city: "Abidjan", address: "Bd de Marseille, Yopougon", lat: 5.3274, lng: -4.0742, pricePerLiter: 740, stock: 5000, capacity: 20000 },
-],
-trucks: [
-{ id: 1, plate: "AB-1234-CI", capacity: 15000, driver: "Koné Mamadou", status: "disponible", stationId: 1 },
-{ id: 2, plate: "CD-5678-CI", capacity: 20000, driver: "Ouédraogo Issouf", status: "en livraison", stationId: 1 },
-{ id: 3, plate: "EF-9012-CI", capacity: 10000, driver: "Touré Sékou", status: "disponible", stationId: 2 },
-],
-deliveries: [
-{ id: 1, truckId: 2, stationId: 1, volume: 15000, date: "2026-05-08", status: "en cours", confirmedBy: null },
-{ id: 2, truckId: 1, stationId: 2, volume: 10000, date: "2026-05-07", status: "terminée", confirmedBy: 5 },
-{ id: 3, truckId: 3, stationId: 3, volume: 8000, date: "2026-05-06", status: "terminée", confirmedBy: 3 },
-],
-sales: [
-{ id: 1, stationId: 1, vendorId: 3, volume: 30, amount: 22500, date: "2026-05-10", time: "08:15" },
-{ id: 2, stationId: 1, vendorId: 3, volume: 50, amount: 37500, date: "2026-05-10", time: "09:30" },
-{ id: 3, stationId: 2, vendorId: 5, volume: 40, amount: 29800, date: "2026-05-10", time: "07:45" },
-{ id: 4, stationId: 1, vendorId: 3, volume: 25, amount: 18750, date: "2026-05-09", time: "14:20" },
-],
-};
-
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
-const loadData = () => {
-try { return JSON.parse(localStorage.getItem("fuelDB")) || INITIAL_DATA; } catch { return INITIAL_DATA; }
-};
-const saveData = (d) => localStorage.setItem("fuelDB", JSON.stringify(d));
 const fmt = (n) => new Intl.NumberFormat("fr-FR").format(n);
 const today = () => new Date().toISOString().split("T")[0];
 const timeNow = () => new Date().toTimeString().slice(0, 5);
-const nextId = (arr) => Math.max(0, ...arr.map((x) => x.id)) + 1;
 
 // ─── TOAST ────────────────────────────────────────────────────────────────────
 function Toast({ msg, type, onClose }) {
@@ -436,11 +405,11 @@ return (
 }
 
 // ─── PIN SCREEN ───────────────────────────────────────────────────────────────
-function PinScreen({ onLogin }) {
+function PinScreen({ onLogin, db }) {
 const [role, setRole] = useState("vendeur");
 const [pin, setPin] = useState("");
 const [error, setError] = useState("");
-const data = loadData();
+const data = db;
 
 const press = (v) => {
 if (pin.length < 4) setPin((p) => p + v);
@@ -617,14 +586,21 @@ const [method, setMethod] = useState("espèces");
 
 const amount = volume ? Math.round(parseFloat(volume) * (station?.pricePerLiter || 0)) : 0;
 
-const submit = () => {
+const submit = async () => {
 const v = parseFloat(volume);
 if (!v || v <= 0) { toast("Entrez un volume valide", "error"); return; }
 if (v > station.stock) { toast("Stock insuffisant !", "error"); return; }
-const newSale = { id: nextId(db.sales), stationId: user.stationId, vendorId: user.id, volume: v, amount, date: today(), time: timeNow(), method };
-const updStations = db.stations.map((s) => s.id === user.stationId ? { ...s, stock: s.stock - v } : s);
-onSave({ ...db, sales: [...db.sales, newSale], stations: updStations });
-setVolume(""); toast("Vente enregistrée ✓", "success");
+try {
+  await insertSale({
+    stationId: user.stationId, vendorId: user.id,
+    volume: v, pricePerLiter: station.pricePerLiter,
+    amount, paymentMethod: method,
+    date: today(), time: timeNow(),
+  });
+  await updateStation(user.stationId, { stock: Math.max(0, station.stock - v) });
+  setVolume(""); toast("Vente enregistrée ✓", "success");
+  await onSave();
+} catch (e) { toast("Erreur: " + e.message, "error"); }
 };
 
 return (
@@ -735,38 +711,38 @@ const myDeliveries = user.role === "admin"
 ? db.deliveries
 : db.deliveries.filter((d) => d.stationId === user.stationId);
 
-const confirm = (id) => {
-const updated = db.deliveries.map((d) => {
-if (d.id !== id) return d;
-const st = db.stations.find((s) => s.id === d.stationId);
-const newStock = Math.min(st.capacity, st.stock + d.volume);
-onSave({
-...db,
-deliveries: db.deliveries.map((x) => x.id === id ? { ...x, status: "terminée", confirmedBy: user.id } : x),
-stations: db.stations.map((s) => s.id === d.stationId ? { ...s, stock: newStock } : s),
-});
-return d;
-});
-toast("Livraison confirmée -- stock mis à jour ✓", "success");
-};
-
-const cancelDelivery = (id) => {
+const confirm = async (id) => {
 const d = db.deliveries.find((x) => x.id === id);
 if (!d) return;
-onSave({
-...db,
-deliveries: db.deliveries.map((x) => x.id === id ? { ...x, status: "annulée" } : x),
-trucks: db.trucks.map((t) => t.id === d.truckId ? { ...t, status: "disponible" } : t),
-});
-toast("Livraison annulée", "success");
+const st = db.stations.find((s) => s.id === d.stationId);
+const newStock = Math.min(st.capacity, st.stock + d.volume);
+try {
+  await updateDelivery(id, { status: "terminée", confirmedBy: user.id, confirmedAt: new Date().toISOString() });
+  await updateStation(d.stationId, { stock: newStock });
+  toast("Livraison confirmée -- stock mis à jour ✓", "success");
+  await onSave();
+} catch (e) { toast("Erreur: " + e.message, "error"); }
 };
 
-const addDelivery = () => {
+const cancelDelivery = async (id) => {
+const d = db.deliveries.find((x) => x.id === id);
+if (!d) return;
+try {
+  await updateDelivery(id, { status: "annulée" });
+  await updateTruck(d.truckId, { status: "disponible" });
+  toast("Livraison annulée", "success");
+  await onSave();
+} catch (e) { toast("Erreur: " + e.message, "error"); }
+};
+
+const addDelivery = async () => {
 if (!form.truckId || !form.stationId || !form.volume) { toast("Remplissez tous les champs", "error"); return; }
-const nd = { id: nextId(db.deliveries), truckId: +form.truckId, stationId: +form.stationId, volume: +form.volume, date: form.date, status: "en cours", confirmedBy: null };
-onSave({ ...db, deliveries: [...db.deliveries, nd] });
-toast("Livraison planifiée ✓", "success");
-setShowModal(false);
+try {
+  await insertDelivery({ truckId: +form.truckId, stationId: +form.stationId, volume: +form.volume, date: form.date });
+  toast("Livraison planifiée ✓", "success");
+  setShowModal(false);
+  await onSave();
+} catch (e) { toast("Erreur: " + e.message, "error"); }
 };
 
 const availableTrucks = db.trucks.filter(t => (user.role === "admin" || t.stationId === user.stationId) && t.status === "disponible");
@@ -865,22 +841,30 @@ const [form, setForm] = useState({ plate: "", capacity: "", driver: "", stationI
 
 const myTrucks = user.role === "admin" ? db.trucks : db.trucks.filter(t => t.stationId === user.stationId);
 
-const addTruck = () => {
+const addTruck = async () => {
 if (!form.plate || !form.capacity || !form.driver) { toast("Remplissez tous les champs", "error"); return; }
-const nt = { id: nextId(db.trucks), plate: form.plate, capacity: +form.capacity, driver: form.driver, status: "disponible", stationId: +form.stationId };
-onSave({ ...db, trucks: [...db.trucks, nt] });
-toast("Camion ajouté ✓", "success");
-setShowModal(false);
-setForm({ plate: "", capacity: "", driver: "", stationId: user.stationId || "" });
+try {
+  await insertTruck({ plate: form.plate, capacity: +form.capacity, driver: form.driver, stationId: +form.stationId });
+  toast("Camion ajouté ✓", "success");
+  setShowModal(false);
+  setForm({ plate: "", capacity: "", driver: "", stationId: user.stationId || "" });
+  await onSave();
+} catch (e) { toast("Erreur: " + e.message, "error"); }
 };
 
-const deleteTruck = (id) => {
-onSave({ ...db, trucks: db.trucks.filter(t => t.id !== id) });
-toast("Camion supprimé", "success");
+const handleDeleteTruck = async (id) => {
+try {
+  await deleteTruck(id);
+  toast("Camion supprimé", "success");
+  await onSave();
+} catch (e) { toast("Erreur: " + e.message, "error"); }
 };
 
-const updateStatus = (id, status) => {
-onSave({ ...db, trucks: db.trucks.map(t => t.id === id ? { ...t, status } : t) });
+const updateStatus = async (id, status) => {
+try {
+  await updateTruck(id, { status });
+  await onSave();
+} catch (e) { toast("Erreur: " + e.message, "error"); }
 };
 
 return (
@@ -914,7 +898,7 @@ return (
                 <option>en livraison</option>
                 <option>maintenance</option>
               </select>
-              <button className="btn btn-danger btn-sm" onClick={() => deleteTruck(t.id)}>✕</button>
+              <button className="btn btn-danger btn-sm" onClick={() => handleDeleteTruck(t.id)}>✕</button>
             </div>
           )}
         </div>
@@ -975,32 +959,40 @@ const myUsers = isAdmin ? db.users : db.users.filter(u => u.stationId === user.s
 const openAdd = () => { setEditTarget(null); setForm(emptyForm); setShowModal(true); };
 const openEdit = (u) => { setEditTarget(u); setForm({ name: u.name, pin: "", newPin: "", role: u.role, stationId: u.stationId || "" }); setShowModal(true); };
 
-const saveUser = () => {
+const saveUser = async () => {
   if (editTarget) {
     if (!form.name) { toast("Nom requis", "error"); return; }
     if (form.newPin && form.newPin.length !== 4) { toast("Nouveau PIN doit faire 4 chiffres", "error"); return; }
     if (form.newPin && db.users.find(u => u.pin === form.newPin && u.id !== editTarget.id)) { toast("Ce PIN est déjà utilisé", "error"); return; }
-    const updated = db.users.map(u => u.id === editTarget.id ? {
-      ...u, name: form.name, role: form.role,
-      stationId: form.stationId ? +form.stationId : null,
-      ...(form.newPin ? { pin: form.newPin } : {})
-    } : u);
-    onSave({ ...db, users: updated });
-    toast("Employé mis à jour ✓", "success");
+    try {
+      await updateUser(editTarget.id, {
+        name: form.name, role: form.role,
+        stationId: form.stationId ? +form.stationId : null,
+        ...(form.newPin ? { pin: form.newPin } : {})
+      });
+      toast("Employé mis à jour ✓", "success");
+      setShowModal(false);
+      await onSave();
+    } catch (e) { toast("Erreur: " + e.message, "error"); }
   } else {
     if (!form.name || form.pin.length !== 4) { toast("Nom et PIN 4 chiffres requis", "error"); return; }
     if (db.users.find(u => u.pin === form.pin)) { toast("Ce PIN est déjà utilisé", "error"); return; }
-    const nu = { id: nextId(db.users), name: form.name, pin: form.pin, role: form.role, stationId: +form.stationId };
-    onSave({ ...db, users: [...db.users, nu] });
-    toast("Utilisateur ajouté ✓", "success");
+    try {
+      await insertUser({ name: form.name, pin: form.pin, role: form.role, stationId: +form.stationId });
+      toast("Utilisateur ajouté ✓", "success");
+      setShowModal(false);
+      await onSave();
+    } catch (e) { toast("Erreur: " + e.message, "error"); }
   }
-  setShowModal(false);
 };
 
-const deleteUser = (id) => {
+const handleDeleteUser = async (id) => {
   if (id === user.id) { toast("Impossible de vous supprimer vous-même", "error"); return; }
-  onSave({ ...db, users: db.users.filter(u => u.id !== id) });
-  toast("Utilisateur supprimé", "success");
+  try {
+    await deleteUser(id);
+    toast("Utilisateur supprimé", "success");
+    await onSave();
+  } catch (e) { toast("Erreur: " + e.message, "error"); }
 };
 
 const roleColors = { admin: "badge-red", gérant: "badge-yellow", vendeur: "badge-blue" };
@@ -1029,7 +1021,7 @@ return (
                 {isAdmin ? (
                   <>
                     <button className="btn btn-outline btn-sm" onClick={() => openEdit(u)}>Éditer</button>
-                    {u.id !== user.id && <button className="btn btn-danger btn-sm" onClick={() => deleteUser(u.id)}>Supprimer</button>}
+                    {u.id !== user.id && <button className="btn btn-danger btn-sm" onClick={() => handleDeleteUser(u.id)}>Supprimer</button>}
                   </>
                 ) : (
                   <span style={{color:"var(--white-dim)",fontSize:"0.75rem"}}>--</span>
@@ -1106,22 +1098,27 @@ const [form, setForm] = useState({ name: "", city: "", address: "", lat: "", lng
 const openAdd = () => { setEditStation(null); setForm({ name: "", city: "", address: "", lat: "", lng: "", pricePerLiter: "", capacity: "" }); setShowModal(true); };
 const openEdit = (s) => { setEditStation(s); setForm({ ...s }); setShowModal(true); };
 
-const save = () => {
+const save = async () => {
 if (!form.name || !form.city) { toast("Nom et ville requis", "error"); return; }
-if (editStation) {
-onSave({ ...db, stations: db.stations.map(s => s.id === editStation.id ? { ...s, ...form, pricePerLiter: +form.pricePerLiter, capacity: +form.capacity, lat: +form.lat, lng: +form.lng } : s) });
-toast("Station mise à jour ✓", "success");
-} else {
-const ns = { id: nextId(db.stations), ...form, pricePerLiter: +form.pricePerLiter, capacity: +form.capacity, lat: +form.lat, lng: +form.lng, stock: 0 };
-onSave({ ...db, stations: [...db.stations, ns] });
-toast("Station créée ✓", "success");
-}
-setShowModal(false);
+try {
+  if (editStation) {
+    await updateStation(editStation.id, { name: form.name, city: form.city, address: form.address, lat: +form.lat, lng: +form.lng, pricePerLiter: +form.pricePerLiter, capacity: +form.capacity });
+    toast("Station mise à jour ✓", "success");
+  } else {
+    await insertStation({ name: form.name, city: form.city, address: form.address, lat: +form.lat, lng: +form.lng, pricePerLiter: +form.pricePerLiter, capacity: +form.capacity, stock: 0 });
+    toast("Station créée ✓", "success");
+  }
+  setShowModal(false);
+  await onSave();
+} catch (e) { toast("Erreur: " + e.message, "error"); }
 };
 
-const deleteStation = (id) => {
-onSave({ ...db, stations: db.stations.filter(s => s.id !== id) });
-toast("Station supprimée", "success");
+const handleDeleteStation = async (id) => {
+try {
+  await deleteStation(id);
+  toast("Station supprimée", "success");
+  await onSave();
+} catch (e) { toast("Erreur: " + e.message, "error"); }
 };
 
 return (
@@ -1148,7 +1145,7 @@ return (
           {user.role === "admin" && (
             <>
               <button className="btn btn-outline btn-sm" onClick={() => openEdit(s)}>Modifier</button>
-              <button className="btn btn-danger btn-sm" onClick={() => deleteStation(s.id)}>Supprimer</button>
+              <button className="btn btn-danger btn-sm" onClick={() => handleDeleteStation(s.id)}>Supprimer</button>
             </>
           )}
         </div>
@@ -1310,17 +1307,38 @@ return (
 export default function App() {
 const [user, setUser] = useState(null);
 const [page, setPage] = useState("dashboard");
-const [db, setDb] = useState(loadData);
+const [db, setDb] = useState({ stations:[], users:[], trucks:[], deliveries:[], sales:[] });
+const [loading, setLoading] = useState(true);
 const [sidebarOpen, setSidebarOpen] = useState(false);
 const [toastMsg, setToastMsg] = useState(null);
 
-const saveDb = useCallback((newDb) => { setDb(newDb); saveData(newDb); }, []);
+const refreshDb = useCallback(async () => {
+  const data = await loadDb();
+  setDb(data);
+}, []);
+
+useEffect(() => {
+  refreshDb().finally(() => setLoading(false));
+}, [refreshDb]);
+
 const toast = useCallback((msg, type = "success") => setToastMsg({ msg, type }), []);
+
+if (loading) return (
+<>
+<style>{STYLES}</style>
+<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--black)'}}>
+  <div style={{textAlign:'center'}}>
+    <div style={{fontSize:'2rem',marginBottom:'12px'}}>⛽</div>
+    <div style={{color:'var(--gold)',fontFamily:"'Rajdhani',sans-serif",letterSpacing:'4px',fontSize:'0.85rem'}}>CHARGEMENT...</div>
+  </div>
+</div>
+</>
+);
 
 if (!user) return (
 <>
 <style>{STYLES}</style>
-<PinScreen onLogin={(u) => { setUser(u); setPage(u.role === "vendeur" ? "sale" : "dashboard"); }} />
+<PinScreen db={db} onLogin={(u) => { setUser(u); setPage(u.role === "vendeur" ? "sale" : "dashboard"); }} />
 </>
 );
 
@@ -1390,12 +1408,12 @@ return (
         </div>
       </div>
       {page === "dashboard" && <Dashboard user={user} db={db} />}
-      {page === "sale" && !isAdmin && <SaleForm user={user} db={db} onSave={saveDb} toast={toast} />}
+      {page === "sale" && !isAdmin && <SaleForm user={user} db={db} onSave={refreshDb} toast={toast} />}
       {page === "stock" && <Stock user={user} db={db} />}
-      {page === "deliveries" && <Deliveries user={user} db={db} onSave={saveDb} toast={toast} />}
-      {page === "trucks" && <Trucks user={user} db={db} onSave={saveDb} toast={toast} />}
-      {page === "personnel" && (isGerant || isAdmin) && <Personnel user={user} db={db} onSave={saveDb} toast={toast} />}
-      {page === "stations" && isAdmin && <Stations user={user} db={db} onSave={saveDb} toast={toast} />}
+      {page === "deliveries" && <Deliveries user={user} db={db} onSave={refreshDb} toast={toast} />}
+      {page === "trucks" && <Trucks user={user} db={db} onSave={refreshDb} toast={toast} />}
+      {page === "personnel" && (isGerant || isAdmin) && <Personnel user={user} db={db} onSave={refreshDb} toast={toast} />}
+      {page === "stations" && isAdmin && <Stations user={user} db={db} onSave={refreshDb} toast={toast} />}
       {page === "map" && <MapView db={db} />}
       {page === "reports" && (isGerant || isAdmin) && <Reports user={user} db={db} />}
     </main>
