@@ -6,6 +6,7 @@ import {
   insertUser, updateUser, deleteUser,
   insertStockAdjustment, loadStockAdjustments,
 } from './lib/db';
+import { authenticatePin } from './lib/auth';
 
 // ─── STYLES ───────────────────────────────────────────────────────────────────
 const STYLES = `
@@ -421,7 +422,7 @@ if (pin.length < 4) setPin((p) => p + v);
 };
 const del = () => setPin((p) => p.slice(0, -1));
 const submit = () => {
-const user = data.users.find((u) => u.pin === pin && u.role === role);
+const user = authenticatePin(data.users, role, pin);
 if (user) { setError(""); onLogin(user); }
 else { setError("Code PIN incorrect"); setPin(""); }
 };
