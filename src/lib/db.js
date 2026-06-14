@@ -1,22 +1,26 @@
 import { supabase } from './supabase'
 
-// ─── LOAD ALL DATA ────────────────────────────────────────────────────────────
-export async function loadDb() {
-  const [
-    { data: stations },
-    { data: users },
-    { data: trucks },
-    { data: deliveries },
-    { data: sales },
-  ] = await Promise.all([
-    supabase.from('stations').select('*').order('id'),
-    supabase.from('users').select('*').order('id'),
-    supabase.from('trucks').select('*').order('id'),
-    supabase.from('deliveries').select('*').order('id'),
-    supabase.from('sales').select('*').order('id'),
-  ])
+const DEMO_DB = {
+  stations: [
+    { id: 1, name: 'Station Plateau', city: 'Abidjan', address: 'Rue du Commerce, Plateau', lat: 5.3203, lng: -4.0185, pricePerLiter: 750, stock: 12000, capacity: 30000 },
+    { id: 2, name: 'Station Cocody', city: 'Abidjan', address: 'Av. Christiani, Cocody', lat: 5.3467, lng: -3.9870, pricePerLiter: 745, stock: 8000, capacity: 25000 },
+    { id: 3, name: 'Station Yopougon', city: 'Abidjan', address: 'Bd de Marseille, Yopougon', lat: 5.3274, lng: -4.0742, pricePerLiter: 740, stock: 5000, capacity: 20000 },
+  ],
+  users: [
+    { id: 1, name: 'Admin Système', pin: '0000', role: 'admin', stationId: null },
+    { id: 2, name: 'Kouamé Jean', pin: '1234', role: 'gérant', stationId: 1 },
+    { id: 3, name: 'Traoré Fatou', pin: '2222', role: 'vendeur', stationId: 1 },
+  ],
+  trucks: [
+    { id: 1, plate: 'AB-1234-CI', capacity: 15000, driver: 'Koné Mamadou', status: 'disponible', stationId: 1 },
+    { id: 2, plate: 'CD-5678-CI', capacity: 20000, driver: 'Ouédraogo Issouf', status: 'en livraison', stationId: 1 },
+    { id: 3, plate: 'EF-9012-CI', capacity: 10000, driver: 'Touré Sékou', status: 'disponible', stationId: 2 },
+  ],
+  deliveries: [],
+  sales: [],
+}
 
-  // Normaliser les noms de colonnes snake_case → camelCase pour compatibilité avec le code existant
+function normalizeDb({ stations, users, trucks, deliveries, sales }) {
   return {
     stations: (stations || []).map(s => ({
       id: s.id,
@@ -32,7 +36,7 @@ export async function loadDb() {
     users: (users || []).map(u => ({
       id: u.id,
       name: u.name,
-      pin: u.pin,
+      pin: u.pin ?? u.pin_hash,
       role: u.role,
       stationId: u.station_id,
     })),
@@ -63,6 +67,40 @@ export async function loadDb() {
       time: s.sale_time,
       method: s.payment_method,
     })),
+  }
+}
+
+function withDemoFallback(data) {
+  return data.users.length ? data : DEMO_DB
+}
+
+// ─── LOAD ALL DATA ────────────────────────────────────────────────────────────
+export async function loadDb() {
+  try {
+    if (!supabase) throw new Error('Configuration Supabase absente')
+
+    const [stationsRes, usersRes, trucksRes, deliveriesRes, salesRes] = await Promise.all([
+      supabase.from('stations').select('*').order('id'),
+      supabase.from('users').select('*').order('id'),
+      supabase.from('trucks').select('*').order('id'),
+      supabase.from('deliveries').select('*').order('id'),
+      supabase.from('sales').select('*').order('id'),
+    ])
+
+    const firstError = [stationsRes, usersRes, trucksRes, deliveriesRes, salesRes].find(res => res.error)?.error
+    if (firstError) throw firstError
+
+    // Normaliser les noms de colonnes snake_case → camelCase pour compatibilité avec le code existant
+    return withDemoFallback(normalizeDb({
+      stations: stationsRes.data,
+      users: usersRes.data,
+      trucks: trucksRes.data,
+      deliveries: deliveriesRes.data,
+      sales: salesRes.data,
+    }))
+  } catch (error) {
+    console.warn('FuelPro: base distante indisponible, utilisation des données démo.', error)
+    return DEMO_DB
   }
 }
 
