@@ -7,7 +7,7 @@ import {
   insertStockAdjustment, loadStockAdjustments,
 } from './lib/db';
 import { authenticatePin } from './lib/auth';
-import { getTruckDeletionConfirmation } from './lib/confirmations';
+import { getPersonnelDeletionConfirmation, getTruckDeletionConfirmation } from './lib/confirmations';
 
 // ─── STYLES ───────────────────────────────────────────────────────────────────
 const STYLES = `
@@ -1082,6 +1082,7 @@ function Personnel({ user, db, onSave, toast }) {
 const isAdmin = user.role === "admin";
 const [showModal, setShowModal] = useState(false);
 const [editTarget, setEditTarget] = useState(null);
+const [deleteModalUser, setDeleteModalUser] = useState(null);
 const emptyForm = { name: "", pin: "", newPin: "", role: "vendeur", stationId: db.stations[0]?.id || "" };
 const [form, setForm] = useState(emptyForm);
 
@@ -1117,14 +1118,18 @@ const saveUser = async () => {
   }
 };
 
-const handleDeleteUser = async (id) => {
-  if (id === user.id) { toast("Impossible de vous supprimer vous-même", "error"); return; }
+const handleDeleteUser = async () => {
+  if (!deleteModalUser) return;
+  if (deleteModalUser.id === user.id) { toast("Impossible de vous supprimer vous-même", "error"); return; }
   try {
-    await deleteUser(id);
+    await deleteUser(deleteModalUser.id);
     toast("Utilisateur supprimé", "success");
+    setDeleteModalUser(null);
     await onSave();
   } catch (e) { toast("Erreur: " + e.message, "error"); }
 };
+
+const deletionCopy = deleteModalUser ? getPersonnelDeletionConfirmation(deleteModalUser) : null;
 
 const roleColors = { admin: "badge-red", gérant: "badge-yellow", vendeur: "badge-blue" };
 
@@ -1152,7 +1157,7 @@ return (
                 {isAdmin ? (
                   <>
                     <button className="btn btn-outline btn-sm" onClick={() => openEdit(u)} title="Éditer">✏️</button>
-                    {u.id !== user.id && <button className="btn btn-danger btn-sm" onClick={() => handleDeleteUser(u.id)} title="Supprimer">🗑️</button>}
+                    {u.id !== user.id && <button className="btn btn-danger btn-sm" onClick={() => setDeleteModalUser(u)} title="Supprimer">🗑️</button>}
                   </>
                 ) : (
                   <span style={{color:"var(--white-dim)",fontSize:"0.75rem"}}>--</span>
@@ -1211,6 +1216,20 @@ return (
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={() => setShowModal(false)}>Annuler</button>
           <button className="btn btn-gold" onClick={saveUser}>{editTarget ? "Enregistrer" : "Ajouter"}</button>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {deleteModalUser && deletionCopy && (
+    <div className="modal-overlay" onClick={() => setDeleteModalUser(null)}>
+      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="personnel-delete-title" onClick={(e) => e.stopPropagation()}>
+        <h3 id="personnel-delete-title">{deletionCopy.title}</h3>
+        <p style={{color:"var(--white-dim)",fontSize:"0.95rem",lineHeight:1.6,marginBottom:12}}>{deletionCopy.message}</p>
+        <p style={{color:"var(--gold)",fontSize:"0.85rem",letterSpacing:1,textTransform:"uppercase"}}>Cette action est définitive.</p>
+        <div className="modal-footer">
+          <button className="btn btn-outline" onClick={() => setDeleteModalUser(null)}>{deletionCopy.cancelLabel}</button>
+          <button className="btn btn-danger" onClick={handleDeleteUser}>{deletionCopy.confirmLabel}</button>
         </div>
       </div>
     </div>

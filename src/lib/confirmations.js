@@ -6,3 +6,12 @@ export function getTruckDeletionConfirmation(truck) {
     cancelLabel: 'Annuler',
   };
 }
+
+export function getPersonnelDeletionConfirmation(person) {
+  return {
+    title: 'Supprimer le membre du personnel ?',
+    message: `Confirmez la suppression définitive de ${person.name}.`,
+    confirmLabel: 'Supprimer',
+    cancelLabel: 'Annuler',
+  };
+}
