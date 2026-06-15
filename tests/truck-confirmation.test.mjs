@@ -1,21 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
-import { confirmTruckDeletion } from '../src/lib/confirmations.js';
+import { getTruckDeletionConfirmation } from '../src/lib/confirmations.js';
 
-test('la suppression camion demande une confirmation avec la plaque', () => {
-  const messages = [];
-  const confirmed = confirmTruckDeletion({ plate: 'AB-1234-CI' }, (message) => {
-    messages.push(message);
-    return true;
+test('la suppression camion prépare le contenu de la modale avec la plaque', () => {
+  assert.deepEqual(getTruckDeletionConfirmation({ plate: 'AB-1234-CI' }), {
+    title: 'Supprimer le camion ?',
+    message: 'Confirmez la suppression définitive du camion AB-1234-CI.',
+    confirmLabel: 'Supprimer',
+    cancelLabel: 'Annuler',
   });
-
-  assert.equal(confirmed, true);
-  assert.deepEqual(messages, ['Supprimer le camion AB-1234-CI ? Cette action est définitive.']);
 });
 
-test('la suppression camion est annulée si le pop-up est refusé', () => {
-  const confirmed = confirmTruckDeletion({ plate: 'AB-1234-CI' }, () => false);
+test('la suppression camion n’utilise pas de pop-up navigateur native', () => {
+  const appSource = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+  const confirmationSource = readFileSync(new URL('../src/lib/confirmations.js', import.meta.url), 'utf8');
 
-  assert.equal(confirmed, false);
+  assert.equal(appSource.includes('window.confirm'), false);
+  assert.equal(confirmationSource.includes('window.confirm'), false);
+  assert.equal(appSource.includes('confirmTruckDeletion('), false);
 });

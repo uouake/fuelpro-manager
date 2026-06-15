@@ -7,7 +7,7 @@ import {
   insertStockAdjustment, loadStockAdjustments,
 } from './lib/db';
 import { authenticatePin } from './lib/auth';
-import { confirmTruckDeletion } from './lib/confirmations';
+import { getTruckDeletionConfirmation } from './lib/confirmations';
 
 // ─── STYLES ───────────────────────────────────────────────────────────────────
 const STYLES = `
@@ -949,6 +949,7 @@ return (
 // ─── TRUCKS ───────────────────────────────────────────────────────────────────
 function Trucks({ user, db, onSave, toast }) {
 const [showModal, setShowModal] = useState(false);
+const [deleteModalTruck, setDeleteModalTruck] = useState(null);
 const [form, setForm] = useState({ plate: "", capacity: "", driver: "", stationId: user.stationId || "" });
 
 const myTrucks = user.role === "admin" ? db.trucks : db.trucks.filter(t => t.stationId === user.stationId);
@@ -964,14 +965,17 @@ try {
 } catch (e) { toast("Erreur: " + e.message, "error"); }
 };
 
-const handleDeleteTruck = async (truck) => {
-if (!confirmTruckDeletion(truck)) return;
+const handleDeleteTruck = async () => {
+if (!deleteModalTruck) return;
 try {
-  await deleteTruck(truck.id);
+  await deleteTruck(deleteModalTruck.id);
   toast("Camion supprimé", "success");
+  setDeleteModalTruck(null);
   await onSave();
 } catch (e) { toast("Erreur: " + e.message, "error"); }
 };
+
+const deletionCopy = deleteModalTruck ? getTruckDeletionConfirmation(deleteModalTruck) : null;
 
 const updateStatus = async (id, status) => {
 try {
@@ -1011,7 +1015,7 @@ return (
                 <option>en livraison</option>
                 <option>maintenance</option>
               </select>
-              <button className="btn btn-danger btn-sm" onClick={() => handleDeleteTruck(t)}>✕</button>
+              <button className="btn btn-danger btn-sm" onClick={() => setDeleteModalTruck(t)}>✕</button>
             </div>
           )}
         </div>
@@ -1050,6 +1054,20 @@ return (
         <div className="modal-footer">
           <button className="btn btn-outline" onClick={() => setShowModal(false)}>Annuler</button>
           <button className="btn btn-gold" onClick={addTruck}>Ajouter</button>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {deleteModalTruck && deletionCopy && (
+    <div className="modal-overlay" onClick={() => setDeleteModalTruck(null)}>
+      <div className="modal" role="dialog" aria-modal="true" aria-labelledby="truck-delete-title" onClick={(e) => e.stopPropagation()}>
+        <h3 id="truck-delete-title">{deletionCopy.title}</h3>
+        <p style={{color:"var(--white-dim)",fontSize:"0.95rem",lineHeight:1.6,marginBottom:12}}>{deletionCopy.message}</p>
+        <p style={{color:"var(--gold)",fontSize:"0.85rem",letterSpacing:1,textTransform:"uppercase"}}>Cette action est définitive.</p>
+        <div className="modal-footer">
+          <button className="btn btn-outline" onClick={() => setDeleteModalTruck(null)}>{deletionCopy.cancelLabel}</button>
+          <button className="btn btn-danger" onClick={handleDeleteTruck}>{deletionCopy.confirmLabel}</button>
         </div>
       </div>
     </div>
