@@ -9,7 +9,10 @@ import {
 import { authenticatePin } from './lib/auth';
 import { getPersonnelDeletionConfirmation, getTruckDeletionConfirmation } from './lib/confirmations';
 import { canAdjustStock } from './lib/permissions';
+import { filterSalesByRange, groupSalesByDate } from './lib/reports';
 
+// — debug helper used in the app and kept stable for tests
+window.__fuelpro_debug = window.__fuelpro_debug || {};
 // ─── STYLES ───────────────────────────────────────────────────────────────────
 const STYLES = `
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap');
@@ -980,10 +983,16 @@ try {
 const deletionCopy = deleteModalTruck ? getTruckDeletionConfirmation(deleteModalTruck) : null;
 
 const updateStatus = async (id, status) => {
-try {
-  await updateTruck(id, { status });
-  await onSave();
-} catch (e) { toast("Erreur: " + e.message, "error"); }
+  const truck = db.trucks.find(t => t.id === id);
+  const activeDelivery = db.deliveries.find(d => d.truckId === id && d.status === "en cours");
+  if (activeDelivery) {
+    toast("Camion en livraison : confirmez ou annulez la livraison avant de changer son statut", "error");
+    return;
+  }
+  try {
+    await updateTruck(id, { status });
+    await onSave();
+  } catch (e) { toast("Erreur: " + e.message, "error"); }
 };
 
 return (
@@ -1012,7 +1021,9 @@ return (
           {(user.role === "gérant" || user.role === "admin") && (
             <div style={{display:"flex",gap:8}}>
               <select value={t.status} onChange={(e) => updateStatus(t.id, e.target.value)}
-                style={{flex:1,background:"var(--black-soft)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--white)",fontSize:"0.8rem",fontFamily:"var(--font-body)"}}>
+                disabled={db.deliveries.some(d => d.truckId === t.id && d.status === "en cours")}
+                title={db.deliveries.some(d => d.truckId === t.id && d.status === "en cours") ? "Camion en livraison : confirmez ou annulez la livraison pour changer le statut" : ""}
+                style={{flex:1,background:"var(--black-soft)",border:"1px solid var(--border)",borderRadius:6,padding:"6px 10px",color:"var(--white)",fontSize:"0.8rem",fontFamily:"var(--font-body)",opacity: db.deliveries.some(d => d.truckId === t.id && d.status === "en cours") ? 0.5 : 1, cursor: db.deliveries.some(d => d.truckId === t.id && d.status === "en cours") ? "not-allowed" : "pointer"}}>
                 <option>disponible</option>
                 <option>en livraison</option>
                 <option>maintenance</option>
@@ -1406,39 +1417,41 @@ function Reports({ user, db }) {
 const myStations = user.role === "admin" ? db.stations : db.stations.filter(s => s.id === user.stationId);
 const mySales = user.role === "admin" ? db.sales : db.sales.filter(s => s.stationId === user.stationId);
 
-const [range, setRange] = useState("7d");
+const [range, setRange] = useState("all");
 const [startDate, setStartDate] = useState(() => {
   const d = new Date(); d.setDate(d.getDate() - 7);
   return d.toISOString().split("T")[0];
 });
 const [endDate, setEndDate] = useState(today);
 
-const filteredSales = useMemo(() => {
-  if (range === "all") return mySales;
-  if (range === "24h") {
-    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    return mySales.filter(s => {
-      const t = new Date(`${s.date || "1970-01-01"}T${s.time || "00:00"}:00`);
-      return !isNaN(t) && t >= cutoff;
-    });
+const presets = [
+  { key: "24h", label: "24h" },
+  { key: "7d", label: "7 jours" },
+  { key: "30d", label: "30 jours" },
+  { key: "all", label: "Tout" },
+  { key: "custom", label: "Personnalisé" },
+];
+
+const applyPreset = (key) => {
+  setRange(key);
+  if (key === "custom") return;
+  if (key === "all") {
+    setStartDate("");
+    setEndDate("");
+    return;
   }
-  const days = range === "7d" ? 7 : range === "30d" ? 30 : 0;
-  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days); cutoff.setHours(0,0,0,0);
-  return mySales.filter(s => {
-    const d = new Date(`${s.date || "1970-01-01"}T00:00:00`);
-    return !isNaN(d) && d >= cutoff;
-  });
-}, [mySales, range]);
+  const days = key === "24h" ? 1 : key === "7d" ? 7 : 30;
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  setStartDate(d.toISOString().split("T")[0]);
+  setEndDate(today());
+};
+
+const filteredSales = useMemo(() => filterSalesByRange(mySales, range, startDate, endDate), [mySales, range, startDate, endDate]);
 
 const customSales = useMemo(() => {
   if (range !== "custom") return filteredSales;
-  if (!startDate || !endDate) return [];
-  const start = new Date(`${startDate}T00:00:00`);
-  const end = new Date(`${endDate}T23:59:59`);
-  return mySales.filter(s => {
-    const d = new Date(`${s.date || "1970-01-01"}T00:00:00`);
-    return !isNaN(d) && d >= start && d <= end;
-  });
+  return filterSalesByRange(mySales, "custom", startDate, endDate);
 }, [filteredSales, range, startDate, endDate, mySales]);
 
 const activeSales = range === "custom" ? customSales : filteredSales;
@@ -1451,17 +1464,7 @@ const sales = activeSales.filter(s => s.stationId === st.id);
 return { ...st, totalSales: sales.length, totalVolume: sales.reduce((a,s)=>a+(s.volume||0),0), totalRevenue: sales.reduce((a,s)=>a+(s.amount||0),0) };
 });
 
-const byDate = useMemo(() => {
-  const map = {};
-  activeSales.forEach(s => {
-    const d = s.date || "—";
-    if (!map[d]) map[d] = { date: d, count: 0, volume: 0, amount: 0 };
-    map[d].count += 1;
-    map[d].volume += s.volume || 0;
-    map[d].amount += s.amount || 0;
-  });
-  return Object.values(map).sort((a, b) => new Date(b.date) - new Date(a.date));
-}, [activeSales]);
+const byDate = useMemo(() => groupSalesByDate(activeSales), [activeSales]);
 
 const rangeLabel = {
   "24h": "24 dernières heures",
@@ -1480,15 +1483,11 @@ return (
 </div>
 
   <div className="card" style={{marginBottom:24}}>
-    <div className="form-row" style={{marginBottom:0, alignItems:"flex-end"}}>
+    <div className="form-row" style={{marginBottom:12, alignItems:"flex-end"}}>
       <div className="form-group" style={{minWidth:220}}>
         <label>Période</label>
-        <select value={range} onChange={(e) => setRange(e.target.value)}>
-          <option value="24h">24 dernières heures</option>
-          <option value="7d">7 derniers jours</option>
-          <option value="30d">30 derniers jours</option>
-          <option value="all">Tout l'historique</option>
-          <option value="custom">Personnalisé</option>
+        <select value={range} onChange={(e) => applyPreset(e.target.value)}>
+          {presets.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
         </select>
       </div>
       {range === "custom" && (
@@ -1503,6 +1502,15 @@ return (
           </div>
         </>
       )}
+    </div>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      {presets.map(p => (
+        <button
+          key={p.key}
+          className={`btn btn-sm ${range === p.key ? "btn-gold" : "btn-outline"}`}
+          onClick={() => applyPreset(p.key)}
+        >{p.label}</button>
+      ))}
     </div>
   </div>
 
