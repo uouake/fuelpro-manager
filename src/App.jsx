@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   loadDb,
   insertSale, updateStation, insertStation, deleteStation,
@@ -1406,34 +1406,125 @@ function Reports({ user, db }) {
 const myStations = user.role === "admin" ? db.stations : db.stations.filter(s => s.id === user.stationId);
 const mySales = user.role === "admin" ? db.sales : db.sales.filter(s => s.stationId === user.stationId);
 
-const byStation = myStations.map(st => {
-const sales = mySales.filter(s => s.stationId === st.id);
-return { ...st, totalSales: sales.length, totalVolume: sales.reduce((a,s)=>a+s.volume,0), totalRevenue: sales.reduce((a,s)=>a+s.amount,0) };
+const [range, setRange] = useState("7d");
+const [startDate, setStartDate] = useState(() => {
+  const d = new Date(); d.setDate(d.getDate() - 7);
+  return d.toISOString().split("T")[0];
 });
+const [endDate, setEndDate] = useState(today);
+
+const filteredSales = useMemo(() => {
+  if (range === "all") return mySales;
+  if (range === "24h") {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    return mySales.filter(s => {
+      const t = new Date(`${s.date || "1970-01-01"}T${s.time || "00:00"}:00`);
+      return !isNaN(t) && t >= cutoff;
+    });
+  }
+  const days = range === "7d" ? 7 : range === "30d" ? 30 : 0;
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days); cutoff.setHours(0,0,0,0);
+  return mySales.filter(s => {
+    const d = new Date(`${s.date || "1970-01-01"}T00:00:00`);
+    return !isNaN(d) && d >= cutoff;
+  });
+}, [mySales, range]);
+
+const customSales = useMemo(() => {
+  if (range !== "custom") return filteredSales;
+  if (!startDate || !endDate) return [];
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T23:59:59`);
+  return mySales.filter(s => {
+    const d = new Date(`${s.date || "1970-01-01"}T00:00:00`);
+    return !isNaN(d) && d >= start && d <= end;
+  });
+}, [filteredSales, range, startDate, endDate, mySales]);
+
+const activeSales = range === "custom" ? customSales : filteredSales;
+
+const totalRevenue = activeSales.reduce((a, s) => a + (s.amount || 0), 0);
+const totalVolume = activeSales.reduce((a, s) => a + (s.volume || 0), 0);
+
+const byStation = myStations.map(st => {
+const sales = activeSales.filter(s => s.stationId === st.id);
+return { ...st, totalSales: sales.length, totalVolume: sales.reduce((a,s)=>a+(s.volume||0),0), totalRevenue: sales.reduce((a,s)=>a+(s.amount||0),0) };
+});
+
+const byDate = useMemo(() => {
+  const map = {};
+  activeSales.forEach(s => {
+    const d = s.date || "—";
+    if (!map[d]) map[d] = { date: d, count: 0, volume: 0, amount: 0 };
+    map[d].count += 1;
+    map[d].volume += s.volume || 0;
+    map[d].amount += s.amount || 0;
+  });
+  return Object.values(map).sort((a, b) => new Date(b.date) - new Date(a.date));
+}, [activeSales]);
+
+const rangeLabel = {
+  "24h": "24 dernières heures",
+  "7d": "7 derniers jours",
+  "30d": "30 derniers jours",
+  "all": "Tout l'historique",
+  "custom": "Période personnalisée",
+}[range];
 
 return (
 <div>
-<div className="page-header"><h2>Rapports & Analyses</h2><div className="gold-line" /></div>
+<div className="page-header">
+  <h2>Rapports & Analyses</h2>
+  <div className="gold-line" />
+  <p>{rangeLabel} • {activeSales.length} vente{activeSales.length > 1 ? "s" : ""}</p>
+</div>
+
+  <div className="card" style={{marginBottom:24}}>
+    <div className="form-row" style={{marginBottom:0, alignItems:"flex-end"}}>
+      <div className="form-group" style={{minWidth:220}}>
+        <label>Période</label>
+        <select value={range} onChange={(e) => setRange(e.target.value)}>
+          <option value="24h">24 dernières heures</option>
+          <option value="7d">7 derniers jours</option>
+          <option value="30d">30 derniers jours</option>
+          <option value="all">Tout l'historique</option>
+          <option value="custom">Personnalisé</option>
+        </select>
+      </div>
+      {range === "custom" && (
+        <>
+          <div className="form-group">
+            <label>Du</label>
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label>Au</label>
+            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          </div>
+        </>
+      )}
+    </div>
+  </div>
 
   <div className="grid-3" style={{marginBottom:24}}>
     <div className="card stat-card">
       <div className="stat-label">Total ventes</div>
-      <div className="stat-value">{mySales.length}</div>
+      <div className="stat-value">{activeSales.length}</div>
       <div className="stat-sub">transactions</div>
     </div>
     <div className="card stat-card">
       <div className="stat-label">Volume total</div>
-      <div className="stat-value">{fmt(mySales.reduce((a,s)=>a+s.volume,0))}</div>
+      <div className="stat-value">{fmt(totalVolume)}</div>
       <div className="stat-sub">litres</div>
     </div>
     <div className="card stat-card">
       <div className="stat-label">Chiffre d'affaires</div>
-      <div className="stat-value">{fmt(mySales.reduce((a,s)=>a+s.amount,0))}</div>
+      <div className="stat-value">{fmt(totalRevenue)}</div>
       <div className="stat-sub">FCFA total</div>
     </div>
   </div>
 
-  <div className="card">
+  <div className="card" style={{marginBottom:24}}>
     <div className="section-title"><h3>Performance par station</h3></div>
     <table>
       <thead><tr><th>Station</th><th>Ventes</th><th>Volume (L)</th><th>Chiffre (FCFA)</th><th>Stock restant</th></tr></thead>
@@ -1449,6 +1540,29 @@ return (
         ))}
       </tbody>
     </table>
+  </div>
+
+  <div className="card">
+    <div className="section-title"><h3>Ventes par date</h3></div>
+    {byDate.length ? (
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Ventes</th><th>Volume (L)</th><th>Chiffre (FCFA)</th></tr></thead>
+          <tbody>
+            {byDate.map(d => (
+              <tr key={d.date}>
+                <td style={{fontWeight:600}}>{d.date === "—" ? "—" : new Date(d.date + "T00:00:00").toLocaleDateString("fr-FR")}</td>
+                <td>{d.count}</td>
+                <td>{fmt(d.volume)}</td>
+                <td style={{color:"var(--gold)",fontWeight:600}}>{fmt(d.amount)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <div className="empty-state">Aucune vente sur cette période.</div>
+    )}
   </div>
 </div>
 
