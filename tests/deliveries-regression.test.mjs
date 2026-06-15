@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { planDeliveryWithClient } from '../src/lib/db.js';
+import { confirmDeliveryWithClient, planDeliveryWithClient } from '../src/lib/db.js';
 
 function createSupabaseSpy() {
   const calls = [];
@@ -61,6 +61,37 @@ test('planifier une livraison passe automatiquement le camion en livraison', asy
       table: 'trucks',
       action: 'update',
       payload: { status: 'en livraison' },
+      eq: { column: 'id', value: 7 },
+    },
+  ]);
+});
+
+test('confirmer une livraison repasse automatiquement le camion en disponible', async () => {
+  const { client, calls } = createSupabaseSpy();
+  const confirmedAt = '2026-06-15T10:00:00.000Z';
+
+  await confirmDeliveryWithClient(client, {
+    deliveryId: 42,
+    truckId: 7,
+    confirmedBy: 3,
+    confirmedAt,
+  });
+
+  assert.deepEqual(calls, [
+    {
+      table: 'deliveries',
+      action: 'update',
+      payload: {
+        status: 'terminée',
+        confirmed_by: 3,
+        confirmed_at: confirmedAt,
+      },
+      eq: { column: 'id', value: 42 },
+    },
+    {
+      table: 'trucks',
+      action: 'update',
+      payload: { status: 'disponible' },
       eq: { column: 'id', value: 7 },
     },
   ]);

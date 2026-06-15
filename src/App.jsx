@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   loadDb,
   insertSale, updateStation, insertStation, deleteStation,
-  updateDelivery, insertDelivery, updateTruck, insertTruck, deleteTruck,
+  confirmDelivery, updateDelivery, insertDelivery, updateTruck, insertTruck, deleteTruck,
   insertUser, updateUser, deleteUser,
   insertStockAdjustment, loadStockAdjustments,
 } from './lib/db';
@@ -828,7 +828,7 @@ if (!d) return;
 const st = db.stations.find((s) => s.id === d.stationId);
 const newStock = Math.min(st.capacity, st.stock + d.volume);
 try {
-  await updateDelivery(id, { status: "terminée", confirmedBy: user.id, confirmedAt: new Date().toISOString() });
+  await confirmDelivery({ deliveryId: id, truckId: d.truckId, confirmedBy: user.id, confirmedAt: new Date().toISOString() });
   await updateStation(d.stationId, { stock: newStock });
   toast("Livraison confirmée -- stock mis à jour ✓", "success");
   await onSave();

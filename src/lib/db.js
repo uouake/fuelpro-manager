@@ -202,6 +202,24 @@ export async function insertDelivery(data) {
   return planDeliveryWithClient(supabase, data)
 }
 
+export async function confirmDeliveryWithClient(client, { deliveryId, truckId, confirmedBy, confirmedAt }) {
+  const { error } = await client
+    .from('deliveries')
+    .update({ status: 'terminée', confirmed_by: confirmedBy, confirmed_at: confirmedAt })
+    .eq('id', deliveryId)
+  if (error) throw error
+
+  const { error: truckError } = await client
+    .from('trucks')
+    .update({ status: 'disponible' })
+    .eq('id', truckId)
+  if (truckError) throw truckError
+}
+
+export async function confirmDelivery(data) {
+  return confirmDeliveryWithClient(supabase, data)
+}
+
 export async function updateDelivery(id, patch) {
   const row = {}
   if (patch.status !== undefined)      row.status = patch.status
