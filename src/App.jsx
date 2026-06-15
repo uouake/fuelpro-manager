@@ -8,6 +8,7 @@ import {
 } from './lib/db';
 import { authenticatePin } from './lib/auth';
 import { getPersonnelDeletionConfirmation, getTruckDeletionConfirmation } from './lib/confirmations';
+import { canAdjustStock } from './lib/permissions';
 
 // ─── STYLES ───────────────────────────────────────────────────────────────────
 const STYLES = `
@@ -673,6 +674,7 @@ return (
 // ─── STOCK ────────────────────────────────────────────────────────────────────
 function Stock({ user, db, toast, refreshDb }) {
 const isAdmin = user.role === "admin";
+const canEditStock = canAdjustStock(user);
 const stations = isAdmin ? db.stations : db.stations.filter((s) => s.id === user.stationId);
 const [adjustModal, setAdjustModal] = useState(null); // station cible
 const [newStock, setNewStock] = useState("");
@@ -737,7 +739,7 @@ return (
   <span style={{fontSize:"0.8rem",color:"var(--white-dim)"}}>Prix/litre</span>
   <span style={{color:"var(--gold)",fontWeight:700,marginLeft:8}}>{fmt(s.pricePerLiter)} FCFA</span>
 </div>
-{isAdmin && <button className="btn btn-outline btn-sm" onClick={() => openAdjust(s)}>Ajuster</button>}
+{canEditStock && <button className="btn btn-outline btn-sm" onClick={() => openAdjust(s)}>Ajuster</button>}
 </div>
 </div>
 );
