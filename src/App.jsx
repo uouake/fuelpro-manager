@@ -7,6 +7,7 @@ import {
   insertStockAdjustment, loadStockAdjustments,
 } from './lib/db';
 import { authenticatePin } from './lib/auth';
+import { confirmTruckDeletion } from './lib/confirmations';
 
 // ─── STYLES ───────────────────────────────────────────────────────────────────
 const STYLES = `
@@ -963,9 +964,10 @@ try {
 } catch (e) { toast("Erreur: " + e.message, "error"); }
 };
 
-const handleDeleteTruck = async (id) => {
+const handleDeleteTruck = async (truck) => {
+if (!confirmTruckDeletion(truck)) return;
 try {
-  await deleteTruck(id);
+  await deleteTruck(truck.id);
   toast("Camion supprimé", "success");
   await onSave();
 } catch (e) { toast("Erreur: " + e.message, "error"); }
@@ -1009,7 +1011,7 @@ return (
                 <option>en livraison</option>
                 <option>maintenance</option>
               </select>
-              <button className="btn btn-danger btn-sm" onClick={() => handleDeleteTruck(t.id)}>✕</button>
+              <button className="btn btn-danger btn-sm" onClick={() => handleDeleteTruck(t)}>✕</button>
             </div>
           )}
         </div>
