@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabase } from './supabase.js'
 
 const DEMO_DB = {
   stations: [
@@ -181,13 +181,25 @@ export async function deleteTruck(id) {
 }
 
 // ─── DELIVERIES ───────────────────────────────────────────────────────────────
-export async function insertDelivery(data) {
-  const { data: row } = await supabase.from('deliveries').insert({
+export async function planDeliveryWithClient(client, data) {
+  const { data: row, error } = await client.from('deliveries').insert({
     truck_id: data.truckId, station_id: data.stationId,
     volume_liters: data.volume, planned_date: data.date,
     status: 'en cours',
   }).select().single()
+  if (error) throw error
+
+  const { error: truckError } = await client
+    .from('trucks')
+    .update({ status: 'en livraison' })
+    .eq('id', data.truckId)
+  if (truckError) throw truckError
+
   return row
+}
+
+export async function insertDelivery(data) {
+  return planDeliveryWithClient(supabase, data)
 }
 
 export async function updateDelivery(id, patch) {
